@@ -23,6 +23,7 @@ function required(name) {
 const config = {
   mongodbUri: required('MONGODB_URI'),
   dbName: process.env.DB_NAME || 'judging_system',
+  adminUsername: process.env.ADMIN_USERNAME || 'admin', // optional, defaults to "admin"
   adminPassword: required('ADMIN_PASSWORD'),
   jwtSecret: required('JWT_SECRET'),
   aiApiKey: process.env.AI_API_KEY || '', // empty = use mock AI feedback

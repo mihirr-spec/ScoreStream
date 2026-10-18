@@ -11,21 +11,32 @@ const { httpError, isNonEmptyString } = require('../middleware/validate');
 
 const router = express.Router();
 
-// POST /api/auth/admin-login  { password }
+// timingSafeEqual compares in constant time, so an attacker can't guess the
+// value letter-by-letter by measuring how fast a wrong answer is rejected.
+// It needs two buffers of the SAME length, so we compare SHA-256 hashes
+// (always 32 bytes) instead of the raw strings.
+function safeEqual(given, expected) {
+  const a = crypto.createHash('sha256').update(given).digest();
+  const b = crypto.createHash('sha256').update(expected).digest();
+  return crypto.timingSafeEqual(a, b);
+}
+
+// POST /api/auth/admin-login  { username, password }
 router.post('/auth/admin-login', (req, res) => {
-  const { password } = req.body || {};
+  const { username, password } = req.body || {};
+  if (!isNonEmptyString(username, 100)) {
+    throw httpError(400, 'username is required');
+  }
   if (typeof password !== 'string' || password.length === 0) {
     throw httpError(400, 'password is required');
   }
 
-  // timingSafeEqual compares in constant time, so an attacker can't guess the
-  // password letter-by-letter by measuring how fast a wrong answer is rejected.
-  // It needs two buffers of the SAME length, so we compare SHA-256 hashes
-  // (always 32 bytes) instead of the raw strings.
-  const given = crypto.createHash('sha256').update(password).digest();
-  const expected = crypto.createHash('sha256').update(config.adminPassword).digest();
-  if (!crypto.timingSafeEqual(given, expected)) {
-    throw httpError(401, 'Wrong password');
+  // Check BOTH, and give the same message either way, so nobody can find out
+  // which of the two was wrong. (& not &&: always run both comparisons.)
+  const usernameOk = safeEqual(username.trim(), config.adminUsername);
+  const passwordOk = safeEqual(password, config.adminPassword);
+  if (!(usernameOk & passwordOk)) {
+    throw httpError(401, 'Wrong username or password');
   }
 
   res.json({ token: signToken({ role: 'admin' }) });

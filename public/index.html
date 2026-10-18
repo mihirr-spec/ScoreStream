@@ -7,9 +7,13 @@
   <meta name="description" content="Judges score from their phones, the leaderboard re-ranks live, and AI writes feedback for every team. Built on MongoDB.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    // Apply the saved theme (light/dark) before the page is drawn.
+    try { if (localStorage.getItem('theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch (e) {}
+  </script>
   <link rel="icon" type="image/png" href="img/favicon.png">
-  <link rel="stylesheet" href="css/style.css?v=7">
+  <link rel="stylesheet" href="css/style.css?v=9">
 </head>
 <body class="landing">
 
@@ -27,6 +31,10 @@
         <a class="nav-link" href="#tech"><span class="link-hover link-hover--slide">Under the hood</span></a>
       </nav>
       <div class="nav-actions">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch between light and dark mode">
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        </button>
         <div class="search-wrap">
           <button class="icon-btn" id="search-btn" type="button" aria-label="Search events" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button>
           <div class="search-pop hidden" id="search-pop">
@@ -87,34 +95,45 @@
     </div>
   </section>
 
-  <!-- ===== How it works ===== -->
-  <section class="section" id="how">
+  <!-- ===== How it works (timeline) ===== -->
+  <section class="section paper" id="how">
+    <!-- faded doodles fill the empty space at the sides -->
+    <div class="doodle-fade left" aria-hidden="true"></div>
+    <div class="doodle-fade right" aria-hidden="true"></div>
     <div class="container">
       <div class="section-head reveal">
-        <div class="kicker">How it works</div>
-        <h2>From first score to final feedback in four steps</h2>
-        <p>No spreadsheets, no adding up marks by hand, no waiting for results.</p>
+        <div class="kicker two-tone"><span>How it</span> works</div>
+        <h2>Four steps, one <em>winner.</em></h2>
+        <p>The whole event, exactly as it runs in ScoreStream.</p>
       </div>
-      <div class="steps">
-        <div class="step reveal">
-          <div class="step-num">1</div>
+      <div class="timeline">
+        <div class="tl-step reveal">
+          <div class="tl-num">01</div>
+          <div class="tl-line"><span class="tl-dot"></span></div>
+          <div class="tl-icon"><svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="14" y="10" width="36" height="46" rx="3"/><path d="M24 10V7h16v3"/><rect x="24" y="5" width="16" height="7" rx="2"/><path d="M21 24l3 3 6-6M21 36l3 3 6-6"/><path d="M34 25h10M34 37h10M21 48h23"/><path d="M15.5 14.5l1 38" opacity=".45"/></svg></div>
           <h3>Set up the event</h3>
-          <p>The admin creates an event, defines a weighted rubric, and adds teams and judges. Everyone gets a private access code.</p>
+          <p>The admin creates the event, sets a weighted rubric, and adds teams and judges. Everyone gets a private code.</p>
         </div>
-        <div class="step reveal">
-          <div class="step-num">2</div>
-          <h3>Judges score</h3>
-          <p>Judges log in, rate each criterion with stars and leave a comment. The weighted total out of 10 is calculated automatically.</p>
+        <div class="tl-step reveal">
+          <div class="tl-num">02</div>
+          <div class="tl-line"><span class="tl-dot"></span></div>
+          <div class="tl-icon"><svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M32 7l7.3 14.8 16.3 2.4-11.8 11.5 2.8 16.2L32 44.3l-14.6 7.6 2.8-16.2L8.4 24.2l16.3-2.4z"/><path d="M32 14l4.8 9.6 10.6 1.6" opacity=".45"/><path d="M20 58h24" /></svg></div>
+          <h3>Judges rate with stars</h3>
+          <p>Judges tap the stars for each criterion and add a comment. The weighted total out of 10 is done for them.</p>
         </div>
-        <div class="step reveal">
-          <div class="step-num">3</div>
+        <div class="tl-step reveal">
+          <div class="tl-num">03</div>
+          <div class="tl-line"><span class="tl-dot"></span></div>
+          <div class="tl-icon"><svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="23" y="22" width="18" height="34" rx="1"/><rect x="7" y="34" width="16" height="22" rx="1"/><rect x="41" y="40" width="16" height="16" rx="1"/><path d="M30 34v-6l2-1.5V34M13 44c0-2 4-2 4 0s-4 3-4 6h4M47 47c0-2 4-2 4 0 0 1.5-2 1.7-2 2 0 .3 2 .5 2 2.2 0 2-4 2-4 0"/><path d="M32 6l2.3 4.6 5 .7-3.6 3.5.9 5-4.6-2.4-4.6 2.4.9-5-3.6-3.5 5-.7z"/><path d="M4 56h56"/></svg></div>
           <h3>Ranks update live</h3>
-          <p>MongoDB notices every new score and re-ranks the teams. Every open leaderboard updates in under a second.</p>
+          <p>MongoDB notices every new score and re-ranks the teams. Every open screen updates in under a second.</p>
         </div>
-        <div class="step reveal">
-          <div class="step-num">4</div>
-          <h3>AI writes feedback</h3>
-          <p>When the event closes, AI reads all judge comments for each team and writes a summary, strengths and improvements.</p>
+        <div class="tl-step reveal">
+          <div class="tl-num">04</div>
+          <div class="tl-line"><span class="tl-dot"></span></div>
+          <div class="tl-icon"><svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14h44a4 4 0 0 1 4 4v24a4 4 0 0 1-4 4H30l-12 10v-10h-8a4 4 0 0 1-4-4V18a4 4 0 0 1 4-4z"/><path d="M18 25h20M18 32h28M18 39h14"/><path d="M48 4l1.5 3.5L53 9l-3.5 1.5L48 14l-1.5-3.5L43 9l3.5-1.5z"/></svg></div>
+          <h3>AI writes the feedback</h3>
+          <p>When the event closes, AI reads every judge comment and writes each team a summary, strengths and next steps.</p>
         </div>
       </div>
     </div>
@@ -235,7 +254,7 @@
         <div class="hgrid-row">
           <button class="hgrid-cell" type="button" data-title="Pushed, not polled" data-text="scores.watch() makes MongoDB push every insert, update and delete to the server the moment it happens."><span>( change streams )</span></button>
           <button class="hgrid-cell" type="button" data-title="Live in every browser" data-text="Each new ranking travels over Server-Sent Events to every open leaderboard, team page and the landing page."><span>( server-sent events )</span></button>
-          <button class="hgrid-cell" type="button" data-title="Proven fast" data-text="explain("executionStats") shows the indexes turning a full collection scan (COLLSCAN) into an index scan (IXSCAN)."><span>( explain() )</span></button>
+          <button class="hgrid-cell" type="button" data-title="Proven fast" data-text="explain(&quot;executionStats&quot;) shows the indexes turning a full collection scan (COLLSCAN) into an index scan (IXSCAN)."><span>( explain() )</span></button>
           <button class="hgrid-cell" type="button" data-title="Marks per criterion" data-text="The team page turns each free-form criteria object into key/value pairs, then averages every criterion with $group."><span>( $objectToArray )</span></button>
           <button class="hgrid-cell" type="button" data-title="One demo event" data-text="A partial unique index on { demo: true } guarantees there is only ever one shared demo event."><span>( partial index )</span></button>
         </div>
@@ -265,7 +284,7 @@
     </div>
   </section>
 
-  <script src="js/common.js?v=7"></script>
-  <script src="js/landing.js?v=7"></script>
+  <script src="js/common.js?v=9"></script>
+  <script src="js/landing.js?v=9"></script>
 </body>
 </html>

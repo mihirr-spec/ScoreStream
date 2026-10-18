@@ -99,7 +99,8 @@ startLiveWidget()
 // ---------- Highlight grid (ported from VengeanceUI "highlight-grid") ----------
 // One coloured highlight glides behind the hovered cell, changing position,
 // size and colour with a CSS transition. The text below explains that feature.
-const GRID_COLORS = ['#1d5cf0', '#2b5fd9', '#1e47b0', '#3b74e6', '#14389c', '#2f73ff', '#3566d6', '#1f4fbf', '#4f8df5'];
+// A different accent colour for every cell (like the original component).
+const GRID_COLORS = ['#E24E1B', '#2B5FD9', '#F79824', '#C2185B', '#4381C1', '#E8A317', '#818D92', '#1D5CF0', '#D64545'];
 
 function setupHighlightGrid() {
   const grid = $('hgrid');

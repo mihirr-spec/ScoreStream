@@ -31,7 +31,7 @@ const ROLES = {
     isPassword: true,
     next: 'admin.html',
     demoLabel: 'Try the demo Administrator account',
-    forgot: 'The admin password is set in the server configuration (ADMIN_PASSWORD in the .env file).',
+    forgot: 'The admin username and password are set in the server configuration (ADMIN_USERNAME and ADMIN_PASSWORD in the .env file).',
   },
 };
 
@@ -53,6 +53,9 @@ function selectRole(role) {
   $('secret').type = r.isPassword ? 'password' : 'text';
   $('secret').placeholder = r.placeholder;
   $('secret').value = '';
+  // Administrator signs in with a username AND a password.
+  $('username-block').classList.toggle('hidden', !r.isPassword);
+  $('username').required = r.isPassword;
   $('icon-key').classList.toggle('hidden', r.isPassword);
   $('icon-lock').classList.toggle('hidden', !r.isPassword);
   $('eye-btn').classList.toggle('hidden', !r.isPassword);
@@ -62,7 +65,7 @@ function selectRole(role) {
 
   // Keep the URL in sync so the page can be bookmarked / shared per role.
   history.replaceState(null, '', `login.html?role=${role}`);
-  $('secret').focus();
+  (r.isPassword ? $('username') : $('secret')).focus();
 }
 
 for (const tab of document.querySelectorAll('.login2-tab')) {
@@ -96,7 +99,9 @@ $('login-form').addEventListener('submit', (e) => {
     button.disabled = true;
     try {
       // No role passed to api(), because we don't have a token yet.
-      const data = await api('POST', r.endpoint, { [r.field]: $('secret').value });
+      const body = { [r.field]: $('secret').value };
+      if (r.isPassword) body.username = $('username').value;
+      const data = await api('POST', r.endpoint, body);
       finishLogin(data.token);
     } finally {
       button.disabled = false;

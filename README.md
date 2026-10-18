@@ -26,6 +26,7 @@ Fill in `.env`:
 |---|---|
 | `MONGODB_URI` | Atlas connection string (Atlas → Connect → Drivers). Also allow your IP under **Network Access**. |
 | `DB_NAME` | e.g. `judging_system` |
+| `ADMIN_USERNAME` | Admin login name (optional, defaults to `admin`) |
 | `ADMIN_PASSWORD` | Any password you choose for the admin page |
 | `JWT_SECRET` | A long random string (e.g. `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`) |
 | `AI_API_KEY` | Your OpenRouter key. Leave it empty to use the offline **MOCK** feedback. |
@@ -46,7 +47,7 @@ Open http://localhost:3000 for the landing page, then **Log in** (one screen, th
 
 | Role | How to log in | What they get |
 |---|---|---|
-| Admin | `ADMIN_PASSWORD` | Create events and rubrics, add teams and judges (codes shown once), open/close events, see all scores, generate AI feedback |
+| Admin | `ADMIN_USERNAME` (default `admin`) + `ADMIN_PASSWORD` | Create events and rubrics, add teams and judges (codes shown once), open/close events, see all scores, generate AI feedback |
 | Judge | Code, e.g. `JUDGE001` to `JUDGE003` (closed event: `SPRING01`, `SPRING02`) | Rate every team of their event with stars or a slider, with a live total preview |
 | Team | Code, e.g. `TEAM001` to `TEAM005` (closed event: `TEAM101` to `TEAM103`) | Live rank, average score and stars, average per criterion, and AI feedback after the event closes |
 
@@ -160,7 +161,7 @@ For example, marks 8, 7, 9 with weights 0.3, 0.4, 0.3 → **7.9**. `avgScore` is
 
 | Method | Path | Who |
 |---|---|---|
-| POST | `/api/auth/admin-login` `{password}` | public |
+| POST | `/api/auth/admin-login` `{username, password}` | public |
 | POST | `/api/auth/judge-login` `{code}` | public |
 | POST | `/api/auth/team-login` `{code}` | public |
 | POST | `/api/auth/demo-login` `{role}` (admin, judge or team demo account) | public |

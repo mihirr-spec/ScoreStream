@@ -192,3 +192,22 @@ function setupSearch() {
   document.addEventListener('keydown', (e) => e.key === 'Escape' && close());
 }
 setupSearch();
+
+// ---------- Light / dark mode ----------
+// The <head> of every page already applied the saved theme before drawing.
+// This button flips it and remembers the choice in localStorage.
+function setupThemeToggle() {
+  for (const btn of document.querySelectorAll('.theme-toggle')) {
+    btn.addEventListener('click', () => {
+      const dark = document.documentElement.dataset.theme !== 'dark';
+      if (dark) document.documentElement.dataset.theme = 'dark';
+      else delete document.documentElement.dataset.theme;
+      try {
+        localStorage.setItem('theme', dark ? 'dark' : 'light');
+      } catch {
+        /* storage blocked - the theme just won't be remembered */
+      }
+    });
+  }
+}
+setupThemeToggle();

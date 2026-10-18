@@ -69,7 +69,7 @@ before(async () => {
   await new Promise((resolve) => server.once('listening', resolve));
   baseUrl = `http://localhost:${server.address().port}`;
 
-  adminToken = (await api('POST', '/api/auth/admin-login', { body: { password: config.adminPassword } })).body.token;
+  adminToken = (await api('POST', '/api/auth/admin-login', { body: { username: config.adminUsername, password: config.adminPassword } })).body.token;
 
   const event = await api('POST', '/api/events', {
     token: adminToken,
