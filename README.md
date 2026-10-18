@@ -42,13 +42,22 @@ npm run seed       # demo data (2 events, teams, judges, scores)
 npm run dev        # start the server (auto-restarts when you edit files)
 ```
 
-Open:
-- Admin: http://localhost:3000/admin.html (log in with `ADMIN_PASSWORD`)
-- Judge: http://localhost:3000/judge.html (seed codes: `JUDGE001`, `JUDGE002`, `JUDGE003`; closed event: `SPRING01`, `SPRING02`)
-- Leaderboard: http://localhost:3000/leaderboard.html (also the site root, http://localhost:3000)
+Open http://localhost:3000 for the landing page, then **Log in** (one screen, three roles):
 
-**Live demo:** open the leaderboard in one window. In another, log in as `JUDGE003` (who has
-not scored anyone yet) and submit a score. The leaderboard re-ranks on its own, without a refresh.
+| Role | How to log in | What they get |
+|---|---|---|
+| Admin | `ADMIN_PASSWORD` | Create events and rubrics, add teams and judges (codes shown once), open/close events, see all scores, generate AI feedback |
+| Judge | Code, e.g. `JUDGE001` to `JUDGE003` (closed event: `SPRING01`, `SPRING02`) | Rate every team of their event with stars or a slider, with a live total preview |
+| Team | Code, e.g. `TEAM001` to `TEAM005` (closed event: `TEAM101` to `TEAM103`) | Live rank, average score and stars, average per criterion, and AI feedback after the event closes |
+
+**Demo accounts:** every role also has a **Try the demo** button (no password or code). They all share
+the *ScoreStream Demo Event* (3 teams) stored in MongoDB. The demo admin is locked to that event by the
+server, so visitors can never see, change or delete real events.
+
+The public leaderboard is at http://localhost:3000/leaderboard.html.
+
+**Live demo:** open the leaderboard in one window. In another, click **Try the demo Judge** and rate
+a team with the stars. The leaderboard re-ranks on its own, without a refresh.
 
 ## 2. Scripts
 
@@ -58,7 +67,7 @@ not scored anyone yet) and submit a score. The leaderboard re-ranks on its own, 
 | `npm run seed` | Deletes and recreates the two demo events |
 | `npm run dev` / `npm start` | Runs the server (with / without auto-restart) |
 | `npm run explain` | Prints COLLSCAN vs IXSCAN for the main queries |
-| `npm test` | Runs the 6 API tests (uses a separate `<DB_NAME>_test` database) |
+| `npm test` | Runs the API tests: the 6 required cases plus team login and demo-account limits (separate `<DB_NAME>_test` database) |
 
 ### explain() screenshots (COLLSCAN vs IXSCAN)
 
@@ -78,7 +87,7 @@ ScoreStream/
 │   ├── config.js               Reads .env in one place
 │   ├── db.js                   One shared MongoClient (connectDb / getDb / closeDb)
 │   ├── middleware/
-│   │   ├── auth.js             JWT tokens, requireAdmin, requireJudge, sha256
+│   │   ├── auth.js             JWT tokens, requireAdmin/Judge/Team, demo-admin limits, sha256
 │   │   ├── validate.js         httpError, parseId, rubric and members validation
 │   │   └── errorHandler.js     JSON 404 and the central error handler
 │   ├── routes/
@@ -89,11 +98,16 @@ ScoreStream/
 │       ├── leaderboard.js      Aggregation pipeline ending in $merge
 │       ├── changeStream.js     Watches scores -> recompute -> SSE push
 │       ├── sse.js              Connected browsers per event
+│       ├── demo.js             Creates the shared demo event behind the demo accounts
 │       └── ai.js               OpenRouter call + fallback model + mock (only AI-specific file)
 ├── public/                     Frontend (plain HTML, CSS, JS)
-│   ├── admin.html  judge.html  leaderboard.html
-│   ├── css/style.css
-│   └── js/admin.js  judge.js  leaderboard.js
+│   ├── index.html              Landing page
+│   ├── login.html              One login screen for Admin / Judge / Team (+ demo buttons)
+│   ├── admin.html  judge.html  team.html  leaderboard.html
+│   ├── css/style.css           Shared design system
+│   ├── img/                    Hero image and free-licensed Pexels photos
+│   └── js/common.js            Shared helpers (api, auth tokens, toasts, stars)
+│       js/landing.js  login.js  admin.js  judge.js  team.js  leaderboard.js
 ├── scripts/                    One-off database scripts
 │   ├── setup-db.js             Collections, $jsonSchema validators, indexes
 │   ├── seed.js                 Demo data
@@ -129,7 +143,11 @@ For example, marks 8, 7, 9 with weights 0.3, 0.4, 0.3 → **7.9**. `avgScore` is
   - `scores` UNIQUE `{eventId, teamId, judgeId}`: the database itself blocks a second score from a judge for the same team (error 11000 → HTTP 409).
   - `scores {eventId}`, `teams {eventId}` and `judges {eventId}` make the per-event queries fast.
   - `leaderboard` UNIQUE `{eventId, teamId}` is required by `$merge`.
-  - Two extras: `judges` UNIQUE `{codeHash}` speeds up judge login and guarantees unique codes, and `feedback` UNIQUE `{eventId, teamId}` keeps one feedback document per team (used by an upsert).
+  - Extras:
+    - `judges` and `teams` UNIQUE `{codeHash}` speed up code logins and guarantee unique codes. The teams one is **sparse**, so teams without a code do not clash.
+    - `feedback` UNIQUE `{eventId, teamId}` keeps one feedback document per team (used by an upsert).
+    - `events` **partial** unique index on `{demo: 1}` (only where `demo: true`) guarantees a single demo event, even if two visitors start the demo at the same moment.
+- **Per-criterion averages** for the team page use `$objectToArray` -> `$unwind` -> `$group` on the free-form `criteria` object.
 - **Aggregation pipeline** (`services/leaderboard.js`): `$match` → `$group` (`$avg`, `$sum`) → `$set` (`$round`) → `$lookup` teams → `$unwind` → `$setWindowFields` with `$rank` → `$project` → `$merge` into `leaderboard`.
 - **Change Stream** (`services/changeStream.js`): `scores.watch()` filtered to insert, update, replace and delete, with `fullDocument: 'updateLookup'`.
   - On any change, the server recomputes that event's leaderboard and pushes it over SSE.
@@ -144,12 +162,16 @@ For example, marks 8, 7, 9 with weights 0.3, 0.4, 0.3 → **7.9**. `avgScore` is
 |---|---|---|
 | POST | `/api/auth/admin-login` `{password}` | public |
 | POST | `/api/auth/judge-login` `{code}` | public |
+| POST | `/api/auth/team-login` `{code}` | public |
+| POST | `/api/auth/demo-login` `{role}` (admin, judge or team demo account) | public |
 | GET, POST | `/api/events` | admin |
 | GET, PATCH, DELETE | `/api/events/:id` (PATCH: status and/or rubric) | admin |
 | GET, POST | `/api/events/:eventId/teams` | admin |
 | PATCH, DELETE | `/api/teams/:id` | admin |
 | GET, POST | `/api/events/:eventId/judges` (POST returns the code once) | admin |
 | DELETE | `/api/judges/:id` | admin |
+| POST | `/api/teams/:id/reset-code`, `/api/judges/:id/reset-code` (new code, shown once) | admin |
+| GET | `/api/team/me` (the team's rank, per-criterion averages, feedback once closed) | team |
 | GET | `/api/judge/me` (the judge's event, rubric, teams and own scores) | judge |
 | POST | `/api/scores` `{teamId, criteria, comment}` | judge |
 | PUT | `/api/scores/:id` `{criteria, comment}` | judge (own scores only) |

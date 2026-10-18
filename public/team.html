@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Team - ScoreStream</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="nav">
+    <div class="container nav-inner">
+      <a class="logo" href="index.html">
+        <span class="logo-mark">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 20V12M12 20V5M19 20v-9"/></svg>
+        </span>
+        ScoreStream
+      </a>
+      <div class="nav-actions">
+        <a class="btn btn-ghost btn-sm hide-sm" id="leaderboard-link" target="_blank">Leaderboard</a>
+        <span class="user-chip">👥 <span class="role-name">Team:</span> <span id="user-name"></span></span>
+        <button class="btn btn-ghost btn-sm" id="logout-btn" type="button">Log out</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="app">
+    <div class="container">
+      <div class="page-head">
+        <div>
+          <h1 id="team-name">Loading...</h1>
+          <div class="sub"><span id="event-name"></span><span id="event-status"></span><span class="muted" id="members"></span></div>
+        </div>
+        <span class="bw-live" id="live-flag"><span class="pulse"></span> Live updates</span>
+      </div>
+
+      <div id="demo-banner" class="demo-banner hidden">
+        <span>⭐ <strong>Demo team.</strong> Your rank updates live while judges rate. Try the demo judge in another tab and watch it move.</span>
+      </div>
+
+      <div class="team-hero">
+        <div class="card">
+          <div class="label muted small" style="font-weight:600;text-transform:uppercase;letter-spacing:.05em">Current rank</div>
+          <div class="rank-big" id="rank">-</div>
+          <p class="muted" id="rank-note" style="margin:10px 0 0">Waiting for the first judge to score you.</p>
+        </div>
+        <div class="card">
+          <div class="ring-wrap">
+            <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+              <circle cx="60" cy="60" r="50" fill="none" stroke="var(--grey-soft)" stroke-width="12"/>
+              <circle id="ring-fill" cx="60" cy="60" r="50" fill="none" stroke="var(--accent)" stroke-width="12"
+                stroke-linecap="round" stroke-dasharray="314.16" stroke-dashoffset="314.16" transform="rotate(-90 60 60)"
+                style="transition: stroke-dashoffset 0.9s ease"/>
+              <text id="ring-text" x="60" y="66" text-anchor="middle" font-family="Space Grotesk, sans-serif" font-size="24" font-weight="700" fill="var(--text)">-</text>
+            </svg>
+            <div>
+              <div class="muted small" style="font-weight:600;text-transform:uppercase;letter-spacing:.05em">Average score</div>
+              <div class="total-big"><span id="avg">-</span><small> / 10</small></div>
+              <div class="muted" id="judges">0 judges have scored you</div>
+              <div id="team-stars" style="margin-top:6px"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <section class="card">
+        <div class="card-head"><h2>Score by criterion</h2><span class="muted small">Average across all judges</span></div>
+        <div id="breakdown"></div>
+      </section>
+
+      <section class="card feedback-card" id="feedback-box">
+        <div class="card-head"><h2>AI feedback</h2></div>
+        <div id="feedback"></div>
+      </section>
+    </div>
+  </main>
+
+  <script src="js/common.js"></script>
+  <script src="js/team.js"></script>
+</body>
+</html>

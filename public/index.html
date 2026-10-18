@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ScoreStream - Live event judging and leaderboards</title>
+  <meta name="description" content="Judges score from their phones, the leaderboard re-ranks live, and AI writes feedback for every team. Built on MongoDB.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ===== Top bar ===== -->
+  <header class="nav">
+    <div class="container nav-inner">
+      <a class="logo" href="index.html">
+        <span class="logo-mark">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 20V12M12 20V5M19 20v-9"/></svg>
+        </span>
+        ScoreStream
+      </a>
+      <nav class="nav-links">
+        <a href="#how">How it works</a>
+        <a href="#roles">Who it's for</a>
+        <a href="#ai">AI feedback</a>
+        <a href="#tech">Under the hood</a>
+      </nav>
+      <div class="nav-actions">
+        <a class="btn btn-ghost btn-sm hide-sm" href="leaderboard.html">Live leaderboard</a>
+        <a class="btn btn-primary btn-sm" href="login.html">Log in</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== Hero (full-width chalkboard "Rankings" photo) ===== -->
+  <section class="hero hero-bg">
+    <div class="container">
+      <div class="hero-copy reveal">
+        <span class="eyebrow"><span class="pulse"></span> Real-time judging, powered by MongoDB</span>
+        <h1>Judge live.<br>Rank <span class="hl">instantly.</span><br>Feedback writes itself.</h1>
+        <p class="lead">ScoreStream replaces paper score sheets at hackathons and project expos. Judges rate teams with stars from any device, the leaderboard re-ranks the moment a score lands, and AI turns every comment into clear feedback.</p>
+        <div class="hero-ctas">
+          <a class="btn btn-primary btn-lg" href="login.html">Get started</a>
+          <a class="btn btn-ghost btn-lg" href="login.html?role=judge&amp;demo=1">Try it as a judge ★</a>
+        </div>
+        <div class="hero-trust">
+          <div><strong>&lt;1s</strong>to update every screen</div>
+          <div><strong>0</strong>manual maths</div>
+          <div><strong>3</strong>roles, one platform</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Live leaderboard strip ===== -->
+  <section class="live-strip">
+    <div class="container live-grid">
+      <div class="reveal">
+        <div class="section-head" style="text-align:left;margin:0 0 18px">
+          <div class="kicker">Happening now</div>
+          <h2>A real leaderboard, updating live</h2>
+          <p>This board is connected to the live demo event. Every time a judge submits a rating, MongoDB recalculates the ranking and pushes it here instantly. No refresh needed.</p>
+        </div>
+        <div class="latest"><span class="pulse"></span><span id="chip-text">Waiting for the next score...</span></div>
+        <div class="hero-ctas" style="margin-top:22px">
+          <a class="btn btn-primary" href="leaderboard.html">Open full leaderboard</a>
+          <a class="btn btn-ghost" href="login.html?role=judge&amp;demo=1">Rate a team yourself</a>
+        </div>
+      </div>
+
+      <!-- Filled by landing.js: real live data if an event is live, otherwise a demo -->
+      <div class="board-widget static reveal" aria-live="polite">
+        <div class="bw-head">
+          <span class="bw-title" id="bw-title">Live leaderboard</span>
+          <span class="bw-live"><span class="pulse"></span> Live</span>
+        </div>
+        <div id="bw-rows"></div>
+        <div class="bw-foot" id="bw-foot">Updates the moment a judge submits</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== How it works ===== -->
+  <section class="section" id="how">
+    <div class="container">
+      <div class="section-head reveal">
+        <div class="kicker">How it works</div>
+        <h2>From first score to final feedback in four steps</h2>
+        <p>No spreadsheets, no adding up marks by hand, no waiting for results.</p>
+      </div>
+      <div class="steps">
+        <div class="step reveal">
+          <div class="step-num">1</div>
+          <h3>Set up the event</h3>
+          <p>The admin creates an event, defines a weighted rubric, and adds teams and judges. Everyone gets a private access code.</p>
+        </div>
+        <div class="step reveal">
+          <div class="step-num">2</div>
+          <h3>Judges score</h3>
+          <p>Judges log in, rate each criterion with stars and leave a comment. The weighted total out of 10 is calculated automatically.</p>
+        </div>
+        <div class="step reveal">
+          <div class="step-num">3</div>
+          <h3>Ranks update live</h3>
+          <p>MongoDB notices every new score and re-ranks the teams. Every open leaderboard updates in under a second.</p>
+        </div>
+        <div class="step reveal">
+          <div class="step-num">4</div>
+          <h3>AI writes feedback</h3>
+          <p>When the event closes, AI reads all judge comments for each team and writes a summary, strengths and improvements.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Roles ===== -->
+  <section class="section soft" id="roles">
+    <div class="container">
+      <div class="section-head reveal">
+        <div class="kicker">Who it's for</div>
+        <h2>One platform, three roles</h2>
+        <p>Each role has its own login and sees exactly what it needs, nothing more.</p>
+      </div>
+
+      <div class="role reveal">
+        <div class="role-media"><img src="img/admin.jpg" alt="Teams working at a hackathon"></div>
+        <div>
+          <span class="role-tag">Admin</span>
+          <h3>Run the whole event from one dashboard</h3>
+          <p>The organiser sets everything up and stays in control from the first score to the final results.</p>
+          <ul class="checks">
+            <li>Create events with a custom weighted rubric</li>
+            <li>Add teams and judges, each with a one-time access code</li>
+            <li>Open scoring, close the event, and see every score in one table</li>
+            <li>Generate AI feedback for every team with one click</li>
+          </ul>
+          <div class="hero-ctas">
+            <a class="btn btn-primary" href="login.html?role=admin">Log in as Admin</a>
+            <a class="btn btn-ghost" href="login.html?role=admin&amp;demo=1">Try the demo Admin</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="role flip reveal">
+        <div class="role-media"><img src="img/judge.jpg" alt="A team pitching their idea to judges"></div>
+        <div>
+          <span class="role-tag">Judge</span>
+          <h3>Score in seconds, from any device</h3>
+          <p>Judges watch the pitch, tap the stars for each criterion and add a comment. The maths is done for them.</p>
+          <ul class="checks">
+            <li>See every team in the event with its members</li>
+            <li>Rate each criterion with stars (or fine-tune with a slider) and see the total live</li>
+            <li>Edit a score any time while the event is live</li>
+            <li>Can never score the same team twice, the database blocks it</li>
+          </ul>
+          <div class="hero-ctas">
+            <a class="btn btn-primary" href="login.html?role=judge">Log in as Judge</a>
+            <a class="btn btn-ghost" href="login.html?role=judge&amp;demo=1">Try the demo Judge</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="role reveal">
+        <div class="role-media"><img src="img/team.jpg" alt="Students preparing their project together"></div>
+        <div>
+          <span class="role-tag">Team</span>
+          <h3>Know where you stand, then learn how to improve</h3>
+          <p>Teams get their own login to follow their rank live and read their feedback after the event.</p>
+          <ul class="checks">
+            <li>Live rank, average score and star rating, updated as judges submit</li>
+            <li>Average mark for every rubric criterion</li>
+            <li>AI feedback with strengths, improvements and overall sentiment</li>
+          </ul>
+          <div class="hero-ctas">
+            <a class="btn btn-primary" href="login.html?role=team">Log in as Team</a>
+            <a class="btn btn-ghost" href="login.html?role=team&amp;demo=1">Try the demo Team</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== AI feedback ===== -->
+  <section class="section" id="ai">
+    <div class="container ai-grid">
+      <div class="reveal">
+        <div class="section-head" style="text-align:left;margin:0 0 24px">
+          <div class="kicker">AI feedback</div>
+          <h2>Every comment, turned into feedback teams can use</h2>
+          <p>Judges write quick notes. When the event closes, an AI model reads all of a team's comments together and writes structured feedback.</p>
+        </div>
+        <ul class="checks">
+          <li>A short summary of what the judges thought</li>
+          <li>Clear strengths and concrete improvements</li>
+          <li>An overall sentiment score from negative to positive</li>
+          <li>A backup model and an offline fallback, so it never breaks a demo</li>
+        </ul>
+      </div>
+      <div class="ai-photo reveal">
+        <img src="img/ai.jpg" alt="Laptop showing code on screen">
+        <div class="ai-card">
+          <h4>Green Route <span class="badge positive">positive</span></h4>
+          <p>The team showed excellent real-world impact with a clear, confident pitch and a strong data story.</p>
+          <div class="meter"><span style="left:92%"></span></div>
+          <div class="meter-labels"><span>Negative</span><span>Neutral</span><span>Positive</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Under the hood ===== -->
+  <section class="section soft" id="tech">
+    <div class="container">
+      <div class="section-head reveal">
+        <div class="kicker">Under the hood</div>
+        <h2>MongoDB does the heavy lifting</h2>
+        <p>The rules, the maths and the live updates all live in the database itself.</p>
+      </div>
+      <div class="tiles">
+        <div class="tile reveal"><code>$jsonSchema</code><h3>Validated documents</h3><p>Every collection has a schema validator, so the database rejects badly shaped data.</p></div>
+        <div class="tile reveal"><code>unique index</code><h3>One score per judge</h3><p>A unique index on event, team and judge makes double scoring impossible.</p></div>
+        <div class="tile reveal"><code>$setWindowFields</code><h3>Ranking in the database</h3><p>An aggregation pipeline averages scores, joins team names, ranks teams and saves the result with $merge.</p></div>
+        <div class="tile reveal"><code>watch()</code><h3>Change Streams</h3><p>MongoDB pushes every new score to the server the moment it is written. No polling.</p></div>
+        <div class="tile reveal"><code>text/event-stream</code><h3>Live in every browser</h3><p>Server-Sent Events carry each new ranking to every open screen instantly.</p></div>
+        <div class="tile reveal"><code>explain()</code><h3>Proven fast</h3><p>Indexes turn full collection scans into index scans that read only what is needed.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Call to action ===== -->
+  <section class="section">
+    <div class="container">
+      <div class="cta reveal">
+        <img src="img/winners.jpg" alt="A winning team celebrating with a prize cheque">
+        <div class="cta-inner">
+          <h2>Ready for your next event?</h2>
+          <p>Set it up in minutes. Judges, teams and the audience all get what they need in real time.</p>
+          <div class="hero-ctas">
+            <a class="btn btn-primary btn-lg" href="login.html?role=admin">Start as Admin</a>
+            <a class="btn btn-ghost btn-lg" href="leaderboard.html">See it live</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <div>
+        <strong>ScoreStream</strong> &middot; NoSQL Databases project, Manipal University Jaipur<br>
+        Mihir Sanghvi &middot; Aryaman Sharma &middot; Satyam
+      </div>
+      <div>
+        <a href="https://github.com/mihirr-spec/ScoreStream">GitHub</a> &middot; Photos from <a href="https://www.pexels.com">Pexels</a> (free license)
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/common.js"></script>
+  <script src="js/landing.js"></script>
+</body>
+</html>

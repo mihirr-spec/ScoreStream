@@ -11,6 +11,7 @@ const { connectDb, getDb, closeDb } = require('../src/db');
 const { sha256 } = require('../src/middleware/auth');
 const { calculateTotal } = require('../src/services/scoring');
 const { recomputeLeaderboard } = require('../src/services/leaderboard');
+const { resetDemoEvent } = require('../src/services/demo');
 
 const demoEvents = [
   {
@@ -22,11 +23,11 @@ const demoEvents = [
       { key: 'execution', label: 'Execution', max: 10, weight: 0.3 },
     ],
     teams: [
-      { name: 'Byte Bandits', members: ['Asha', 'Rohan'] },
-      { name: 'Null Pointers', members: ['Kabir', 'Meera', 'Dev'] },
-      { name: 'Query Queens', members: ['Isha', 'Zoya'] },
-      { name: 'Stack Smashers', members: ['Arjun', 'Neel'] },
-      { name: 'The Indexers', members: ['Priya', 'Sam', 'Tara'] },
+      { name: 'Byte Bandits', members: ['Asha', 'Rohan'], code: 'TEAM001' },
+      { name: 'Null Pointers', members: ['Kabir', 'Meera', 'Dev'], code: 'TEAM002' },
+      { name: 'Query Queens', members: ['Isha', 'Zoya'], code: 'TEAM003' },
+      { name: 'Stack Smashers', members: ['Arjun', 'Neel'], code: 'TEAM004' },
+      { name: 'The Indexers', members: ['Priya', 'Sam', 'Tara'], code: 'TEAM005' },
     ],
     // Plain codes are only in this demo script so you can log in. The DB stores hashes.
     judges: [
@@ -60,9 +61,9 @@ const demoEvents = [
       { key: 'pitch', label: 'Pitch', max: 5, weight: 0.5 },
     ],
     teams: [
-      { name: 'Green Route', members: ['Nina', 'Omar'] },
-      { name: 'MediTrack', members: ['Lea', 'Vik'] },
-      { name: 'StudyBuddy', members: ['Ana', 'Raj', 'Kim'] },
+      { name: 'Green Route', members: ['Nina', 'Omar'], code: 'TEAM101' },
+      { name: 'MediTrack', members: ['Lea', 'Vik'], code: 'TEAM102' },
+      { name: 'StudyBuddy', members: ['Ana', 'Raj', 'Kim'], code: 'TEAM103' },
     ],
     judges: [
       { name: 'Prof. Rao', code: 'SPRING01' },
@@ -103,7 +104,7 @@ async function seedEvent(db, demo) {
   // insertMany returns insertedIds as { 0: id, 1: id, ... } in the same order.
   const teamResult = await db
     .collection('teams')
-    .insertMany(demo.teams.map((t) => ({ eventId, name: t.name, members: t.members })));
+    .insertMany(demo.teams.map((t) => ({ eventId, name: t.name, members: t.members, codeHash: sha256(t.code) })));
   const judgeResult = await db
     .collection('judges')
     .insertMany(demo.judges.map((j) => ({ eventId, name: j.name, codeHash: sha256(j.code) })));
@@ -132,6 +133,7 @@ async function seedEvent(db, demo) {
   console.log(`\n${demo.name}  [${demo.status}]  id=${eventId}`);
   console.log(`  ${demo.teams.length} teams, ${scoreDocs.length} scores`);
   console.log('  Judge codes:', demo.judges.map((j) => `${j.name} = ${j.code}`).join(', '));
+  console.log('  Team codes: ', demo.teams.map((t) => `${t.name} = ${t.code}`).join(', '));
 }
 
 async function main() {
@@ -146,6 +148,11 @@ async function main() {
   for (const demo of demoEvents) {
     await seedEvent(db, demo);
   }
+
+  // The shared event behind the one-click demo accounts (3 teams, starts fresh).
+  const demoEvent = await resetDemoEvent();
+  console.log(`\n${demoEvent.name}  [${demoEvent.status}]  id=${demoEvent._id}`);
+  console.log('  3 teams. Use the "Try the demo" buttons on the login page (no codes needed).');
   console.log('\nSeed complete.');
 }
 

@@ -3,105 +3,116 @@
 // no polling. EventSource also reconnects by itself if the connection drops.
 
 const eventId = new URLSearchParams(location.search).get('event');
-let previousScores = {}; // teamId -> avgScore, to highlight rows that changed
+let previous = {}; // teamId -> { rank, avgScore } from the last update
 
-function $(id) {
-  return document.getElementById(id);
-}
-
-function el(tag, text, className) {
-  const node = document.createElement(tag);
-  if (text !== undefined && text !== null) node.textContent = text;
-  if (className) node.className = className;
-  return node;
-}
-
-function showError(text) {
-  $('message').textContent = text;
-  $('message').className = 'message error';
-}
-
-async function getJson(path) {
-  const res = await fetch(path);
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Request failed');
-  return data;
-}
-
-// ---------- no event chosen: show a list ----------
-
+// ---------- No event chosen: show event cards ----------
 async function showEventPicker() {
   $('event-picker').classList.remove('hidden');
-  const events = await getJson('/api/leaderboard/events');
+  const events = await api('GET', '/api/leaderboard/events');
   const list = $('event-list');
-  if (events.length === 0) list.append(el('p', 'No live or closed events yet.', 'muted'));
+  if (events.length === 0) list.append(el('div', 'No live or closed events yet.', 'card empty'));
+
   for (const event of events) {
-    const item = el('div', null, 'list-item');
-    const link = el('a', event.name);
-    link.href = `leaderboard.html?event=${event._id}`;
-    item.append(link, el('span', event.status, `pill ${event.status}`));
-    list.append(item);
+    const card = el('a', null, 'card event-card');
+    card.href = `leaderboard.html?event=${event._id}`;
+    const head = el('div', null, 'card-head');
+    head.append(el('h3', event.name), badge(event.status));
+    card.append(head, el('p', event.status === 'live' ? 'Scoring in progress - watch it update live.' : 'Final results and AI feedback.', 'muted'));
+    list.append(card);
   }
 }
 
-// ---------- the leaderboard table ----------
+// ---------- Podium (top 3) ----------
+function renderPodium(rows) {
+  const podium = $('podium');
+  podium.replaceChildren();
+  if (rows.length === 0) return;
 
+  // Visual order: 2nd, 1st, 3rd (1st in the middle).
+  const medals = { 1: '🥇', 2: '🥈', 3: '🥉' };
+  for (const index of [1, 0, 2]) {
+    const row = rows[index];
+    if (!row) {
+      podium.append(el('div'));
+      continue;
+    }
+    const spot = el('div', null, `podium-spot p${row.rank === 1 ? 1 : ''}`);
+    spot.append(
+      el('div', medals[row.rank] || `#${row.rank}`, 'medal'),
+      el('div', row.teamName, 'pname'),
+      el('div', row.avgScore.toFixed(2), 'pscore'),
+      starsFromScore(row.avgScore),
+      el('div', `${row.judgesCount} judge(s)`, 'muted small')
+    );
+    podium.append(spot);
+  }
+}
+
+// ---------- Full table ----------
 function renderRows(rows) {
+  renderPodium(rows);
   const tbody = $('rows');
   tbody.replaceChildren();
   $('empty').classList.toggle('hidden', rows.length > 0);
 
   for (const row of rows) {
-    const tr = el('tr');
-    if (row.rank === 1) tr.className = 'top1';
-    // Flash the row if this team's average changed since the last update.
-    const before = previousScores[row.teamId];
-    if (before !== undefined && before !== row.avgScore) tr.classList.add('changed');
+    const tr = el('tr', null, 'lb-row');
+    const before = previous[row.teamId];
 
-    tr.append(
-      el('td', `#${row.rank}`, 'rank'),
-      el('td', row.teamName),
-      el('td', row.avgScore.toFixed(2), 'score-big'),
-      el('td', row.judgesCount)
-    );
+    const rankCell = el('td', `#${row.rank}`, 'rank-cell');
+    // Arrow showing how the rank moved since the last update.
+    if (before && before.rank !== row.rank) {
+      const up = row.rank < before.rank;
+      rankCell.append(el('span', up ? `▲${before.rank - row.rank}` : `▼${row.rank - before.rank}`, `move ${up ? 'up' : 'down'}`));
+    }
+    if (before && before.avgScore !== row.avgScore) tr.classList.add('changed');
+
+    const barCell = el('td');
+    const bar = el('div', null, 'bar');
+    const fill = el('span');
+    fill.style.width = `${(row.avgScore / 10) * 100}%`;
+    bar.append(fill);
+    barCell.append(bar);
+
+    const nameCell = el('td');
+    nameCell.append(el('strong', row.teamName), el('br'), starsFromScore(row.avgScore));
+
+    tr.append(rankCell, nameCell, el('td', row.avgScore.toFixed(2), 'rank-cell'), barCell, el('td', row.judgesCount));
     tbody.append(tr);
+    if (tr.classList.contains('changed')) setTimeout(() => tr.classList.remove('changed'), 1600);
   }
 
-  previousScores = {};
-  for (const row of rows) previousScores[row.teamId] = row.avgScore;
-  $('updated').textContent = `Last update: ${new Date().toLocaleTimeString()}`;
+  previous = {};
+  for (const row of rows) previous[row.teamId] = { rank: row.rank, avgScore: row.avgScore };
+  $('updated').textContent = `Updated ${new Date().toLocaleTimeString()}`;
+}
+
+function setConnection(isLive) {
+  $('conn-dot').className = isLive ? 'pulse' : 'pulse off';
+  $('conn-text').textContent = isLive ? 'Live' : 'Reconnecting...';
 }
 
 function connectLiveUpdates() {
   const source = new EventSource(`/api/events/${eventId}/stream`);
-
   // Our server sends messages named "leaderboard" (see services/sse.js).
-  source.addEventListener('leaderboard', (msg) => {
-    renderRows(JSON.parse(msg.data));
-  });
-  source.addEventListener('open', () => {
-    $('connection').textContent = '● Live';
-    $('connection').className = 'connection on shrink';
-  });
-  source.addEventListener('error', () => {
-    $('connection').textContent = '● Reconnecting...';
-    $('connection').className = 'connection off shrink';
-  });
+  source.addEventListener('leaderboard', (msg) => renderRows(JSON.parse(msg.data)));
+  source.addEventListener('open', () => setConnection(true));
+  source.addEventListener('error', () => setConnection(false));
 }
 
 // ---------- AI feedback (closed events only) ----------
-
 async function loadFeedback() {
-  const items = await getJson(`/api/events/${eventId}/feedback`);
+  const items = await api('GET', `/api/events/${eventId}/feedback`);
   if (items.length === 0) return;
   $('feedback-section').classList.remove('hidden');
   const list = $('feedback-list');
+
   for (const f of items) {
     const card = el('div', null, 'card feedback-card');
     const title = el('h3', f.teamName);
-    title.append(' ', el('span', f.sentiment.label, `pill ${f.sentiment.label}`));
-    if (f.source === 'mock') title.append(' ', el('span', 'mock', 'pill mock'));
-    card.append(title, el('p', f.summary));
+    title.append(badge(f.sentiment.label));
+    if (f.source === 'mock') title.append(badge('mock'));
+    card.append(title, el('p', f.summary, 'muted'));
     for (const [heading, points] of [['Strengths', f.strengths], ['Improvements', f.improvements]]) {
       if (points.length === 0) continue;
       const ul = el('ul');
@@ -112,22 +123,20 @@ async function loadFeedback() {
   }
 }
 
-// ---------- start ----------
-
+// ---------- Start ----------
 async function start() {
   if (!eventId) return showEventPicker();
 
   // First load with a normal request (also checks the event exists).
-  const data = await getJson(`/api/events/${eventId}/leaderboard`);
+  const data = await api('GET', `/api/events/${eventId}/leaderboard`);
   $('board').classList.remove('hidden');
   $('event-name').textContent = data.event.name;
-  $('event-status').textContent = data.event.status;
-  $('event-status').className = `pill ${data.event.status}`;
-  document.title = `${data.event.name} - Leaderboard`;
+  $('event-status').replaceChildren(badge(data.event.status));
+  document.title = `${data.event.name} - ScoreStream`;
   renderRows(data.rows);
 
   connectLiveUpdates();
   if (data.event.status === 'closed') await loadFeedback();
 }
 
-start().catch((err) => showError(err.message));
+safely(start);

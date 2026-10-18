@@ -1,115 +1,48 @@
-// Admin page logic. Plain JavaScript: fetch() calls our API, then we build the page.
-// We always use textContent (never innerHTML with data), so names typed by users
-// can't inject HTML/JavaScript into the page.
+// Admin dashboard: events list, create event, and one event's teams, judges,
+// scores and AI feedback. Every change goes through our JSON API.
 
-let token = sessionStorage.getItem('adminToken');
+requireLogin('admin');
+
+// A demo admin token is limited to the demo event (the server enforces this).
+const isDemo = Boolean(tokenPayload('admin').demoEventId);
+setupUserBar('admin', isDemo ? 'Demo admin' : 'Admin');
+
 let selectedEvent = null;
 
-// ---------- small helpers ----------
+// Shortcut: every admin request sends the admin token.
+const adminApi = (method, path, body) => api(method, path, body, 'admin');
 
-function $(id) {
-  return document.getElementById(id);
+function showPanel(name) {
+  $('create-panel').classList.toggle('hidden', name !== 'create');
+  $('welcome-panel').classList.toggle('hidden', name !== 'welcome');
+  $('event-panel').classList.toggle('hidden', name !== 'event');
 }
 
-// Creates an element with optional text and CSS class.
-function el(tag, text, className) {
-  const node = document.createElement(tag);
-  if (text !== undefined && text !== null) node.textContent = text;
-  if (className) node.className = className;
-  return node;
-}
-
-function showMessage(text, type = 'ok') {
-  const box = $('message');
-  box.textContent = text;
-  box.className = `message ${type}`;
-  clearTimeout(showMessage.timer);
-  showMessage.timer = setTimeout(() => box.classList.add('hidden'), 5000);
-}
-
-// Calls our API with the admin token. Throws an Error with the server's message on failure.
-async function api(method, path, body) {
-  const res = await fetch(path, {
-    method,
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const data = await res.json();
-  if (res.status === 401) logout();
-  if (!res.ok) throw new Error(data.error || 'Request failed');
-  return data;
-}
-
-// Runs an async action and shows any error message on the page.
-async function safely(action) {
-  try {
-    await action();
-  } catch (err) {
-    showMessage(err.message, 'error');
-  }
-}
-
-// ---------- login / logout ----------
-
-$('login-form').addEventListener('submit', (e) => {
-  e.preventDefault();
-  safely(async () => {
-    const res = await fetch('/api/auth/admin-login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: $('password').value }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
-    token = data.token;
-    sessionStorage.setItem('adminToken', token);
-    $('password').value = '';
-    showApp();
-  });
-});
-
-function logout() {
-  token = null;
-  sessionStorage.removeItem('adminToken');
-  $('app-section').classList.add('hidden');
-  $('login-section').classList.remove('hidden');
-}
-$('logout-btn').addEventListener('click', logout);
-
-function showApp() {
-  $('login-section').classList.add('hidden');
-  $('app-section').classList.remove('hidden');
-  safely(loadEvents);
-}
-
-// ---------- events list ----------
-
+// ---------- Events list (left column) ----------
 async function loadEvents() {
-  const events = await api('GET', '/api/events');
+  const events = await adminApi('GET', '/api/events');
   const list = $('event-list');
   list.replaceChildren();
-  if (events.length === 0) list.append(el('p', 'No events yet. Create one below.', 'muted'));
+  if (events.length === 0) list.append(el('p', 'No events yet.', 'muted small'));
 
   for (const event of events) {
-    const item = el('div', null, 'list-item');
-    const left = el('div');
-    left.append(el('strong', event.name), ' ', el('span', event.status, `pill ${event.status}`));
-    const btn = el('button', 'Manage', 'small');
-    btn.addEventListener('click', () => safely(() => selectEvent(event._id)));
-    item.append(left, btn);
+    const item = el('button', null, 'event-item');
+    item.type = 'button';
+    if (selectedEvent && selectedEvent._id === event._id) item.classList.add('active');
+    item.append(el('strong', event.name), badge(event.status));
+    item.addEventListener('click', () => safely(() => selectEvent(event._id)));
     list.append(item);
   }
 }
 
-// ---------- create event (rubric editor) ----------
-
+// ---------- Create event (rubric editor) ----------
 function addRubricRow(values = {}) {
-  const row = el('div', null, 'row rubric-row');
+  const row = el('div', null, 'rubric-row');
   const fields = [
     ['key', 'key (e.g. design)', 'text', values.key || ''],
     ['label', 'Label', 'text', values.label || ''],
-    ['max', 'Max mark', 'number', values.max || 10],
-    ['weight', 'Weight (0-1)', 'number', values.weight || ''],
+    ['max', 'Max', 'number', values.max || 10],
+    ['weight', 'Weight', 'number', values.weight || ''],
   ];
   for (const [name, placeholder, type, value] of fields) {
     const input = el('input');
@@ -121,7 +54,7 @@ function addRubricRow(values = {}) {
     input.addEventListener('input', updateWeightSum);
     row.append(input);
   }
-  const remove = el('button', 'x', 'secondary small shrink');
+  const remove = el('button', '✕', 'btn btn-ghost btn-sm');
   remove.type = 'button';
   remove.addEventListener('click', () => {
     row.remove();
@@ -143,23 +76,28 @@ function readRubric() {
 
 function updateWeightSum() {
   const sum = readRubric().reduce((total, item) => total + (item.weight || 0), 0);
-  $('weight-sum').textContent = `Weights total: ${sum.toFixed(2)} ${Math.abs(sum - 1) < 0.001 ? '(ok)' : '(must be 1)'}`;
+  const ok = Math.abs(sum - 1) < 0.001;
+  $('weight-sum').textContent = `Weights total ${sum.toFixed(2)} ${ok ? '✓' : '(must be 1)'}`;
 }
 
 $('add-rubric-row').addEventListener('click', () => addRubricRow());
+$('new-event-btn').addEventListener('click', () => {
+  selectedEvent = null;
+  showPanel('create');
+  safely(loadEvents);
+});
 
 $('event-form').addEventListener('submit', (e) => {
   e.preventDefault();
   safely(async () => {
-    // The server validates everything again - this page is just a convenience.
-    const event = await api('POST', '/api/events', {
+    // The server validates everything again - this form is just a convenience.
+    const event = await adminApi('POST', '/api/events', {
       name: $('event-name').value,
       status: $('event-status').value,
       rubric: readRubric(),
     });
-    showMessage(`Event "${event.name}" created`);
+    toast(`Event "${event.name}" created`);
     $('event-name').value = '';
-    await loadEvents();
     await selectEvent(event._id);
   });
 });
@@ -169,32 +107,31 @@ addRubricRow({ key: 'innovation', label: 'Innovation', max: 10, weight: 0.3 });
 addRubricRow({ key: 'design', label: 'Design', max: 10, weight: 0.4 });
 addRubricRow({ key: 'execution', label: 'Execution', max: 10, weight: 0.3 });
 
-// ---------- one selected event ----------
-
+// ---------- One selected event ----------
 async function selectEvent(eventId) {
-  selectedEvent = await api('GET', `/api/events/${eventId}`);
+  selectedEvent = await adminApi('GET', `/api/events/${eventId}`);
   const ev = selectedEvent;
-  $('event-detail').classList.remove('hidden');
-  $('detail-name').textContent = ev.name;
-  $('detail-status').textContent = ev.status;
-  $('detail-status').className = `pill ${ev.status}`;
-  $('detail-rubric').textContent =
-    ' Rubric: ' + ev.rubric.map((r) => `${r.label} (max ${r.max}, weight ${r.weight})`).join(', ');
-  $('leaderboard-link').href = `leaderboard.html?event=${ev._id}`;
-  $('generate-feedback').disabled = ev.status !== 'closed';
-  $('new-judge-code').classList.add('hidden');
+  showPanel('event');
+  $('code-box').classList.add('hidden');
 
-  await Promise.all([loadTeams(), loadJudges(), loadScores(), loadFeedback()]);
-  $('event-detail').scrollIntoView({ behavior: 'smooth' });
+  $('detail-name').textContent = ev.name;
+  $('detail-status').replaceChildren(badge(ev.status));
+  $('detail-rubric').textContent = ev.rubric.map((r) => `${r.label} ${Math.round(r.weight * 100)}%`).join('  ·  ');
+  $('leaderboard-link').href = `leaderboard.html?event=${ev._id}`;
+  for (const btn of $('status-seg').children) btn.classList.toggle('active', btn.dataset.status === ev.status);
+  $('generate-feedback').disabled = ev.status !== 'closed';
+  $('feedback-note').textContent =
+    ev.status === 'closed' ? 'The event is closed - you can generate feedback now.' : 'Available after the event is closed. Generated one team at a time.';
+
+  await Promise.all([loadEvents(), loadTeams(), loadJudges(), loadScores(), loadFeedback()]);
 }
 
-// Status buttons: draft / live / closed
-for (const btn of document.querySelectorAll('.status-btn')) {
+// Status switch: draft / live / closed
+for (const btn of $('status-seg').children) {
   btn.addEventListener('click', () =>
     safely(async () => {
-      await api('PATCH', `/api/events/${selectedEvent._id}`, { status: btn.dataset.status });
-      showMessage(`Status changed to ${btn.dataset.status}`);
-      await loadEvents();
+      await adminApi('PATCH', `/api/events/${selectedEvent._id}`, { status: btn.dataset.status });
+      toast(`Event is now ${btn.dataset.status}`);
       await selectEvent(selectedEvent._id);
     })
   );
@@ -203,36 +140,76 @@ for (const btn of document.querySelectorAll('.status-btn')) {
 $('delete-event-btn').addEventListener('click', () =>
   safely(async () => {
     if (!confirm(`Delete "${selectedEvent.name}" and ALL its teams, judges and scores?`)) return;
-    await api('DELETE', `/api/events/${selectedEvent._id}`);
-    showMessage('Event deleted');
+    await adminApi('DELETE', `/api/events/${selectedEvent._id}`);
+    toast('Event deleted');
     selectedEvent = null;
-    $('event-detail').classList.add('hidden');
+    showPanel('welcome');
     await loadEvents();
   })
 );
 
-// ---------- teams ----------
+// Tabs
+for (const tab of document.querySelectorAll('.tab')) {
+  tab.addEventListener('click', () => {
+    for (const t of document.querySelectorAll('.tab')) t.classList.toggle('active', t === tab);
+    for (const panel of document.querySelectorAll('[data-panel]')) panel.classList.toggle('hidden', panel.dataset.panel !== tab.dataset.tab);
+  });
+}
 
+// ---------- Access code box (judges + teams) ----------
+function showCode(forWhat, code) {
+  $('code-for').textContent = `Access code for ${forWhat}`;
+  $('code-value').textContent = code;
+  $('code-box').classList.remove('hidden');
+  $('code-box').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+$('copy-code').addEventListener('click', () =>
+  safely(async () => {
+    await navigator.clipboard.writeText($('code-value').textContent);
+    toast('Code copied');
+  })
+);
+
+// One row in the teams / judges list, with "New code" and "Delete" buttons.
+function listRow(title, subtitle, onReset, onDelete) {
+  const item = el('div', null, 'list-item');
+  const left = el('div');
+  left.append(el('strong', title));
+  if (subtitle) left.append(el('div', subtitle, 'muted small'));
+  const actions = el('div', null, 'list-actions');
+  const reset = el('button', 'New code', 'btn btn-ghost btn-sm');
+  reset.addEventListener('click', () => safely(onReset));
+  const del = el('button', 'Delete', 'btn btn-danger btn-sm');
+  del.addEventListener('click', () => safely(onDelete));
+  actions.append(reset, del);
+  item.append(left, actions);
+  return item;
+}
+
+// ---------- Teams ----------
 async function loadTeams() {
-  const teams = await api('GET', `/api/events/${selectedEvent._id}/teams`);
+  const teams = await adminApi('GET', `/api/events/${selectedEvent._id}/teams`);
+  $('stat-teams').textContent = teams.length;
   const list = $('team-list');
   list.replaceChildren();
-  if (teams.length === 0) list.append(el('p', 'No teams yet.', 'muted'));
+  if (teams.length === 0) list.append(el('div', 'No teams yet. Add the first one above.', 'empty'));
+
   for (const team of teams) {
-    const item = el('div', null, 'list-item');
-    const left = el('div');
-    left.append(el('strong', team.name), el('span', `  ${team.members.join(', ')}`, 'muted'));
-    const del = el('button', 'Delete', 'danger small');
-    del.addEventListener('click', () =>
-      safely(async () => {
-        if (!confirm(`Delete team "${team.name}" and its scores?`)) return;
-        await api('DELETE', `/api/teams/${team._id}`);
-        await loadTeams();
-        await loadScores();
-      })
+    list.append(
+      listRow(
+        team.name,
+        team.members.join(', '),
+        async () => {
+          const res = await adminApi('POST', `/api/teams/${team._id}/reset-code`);
+          showCode(`team ${res.name}`, res.code);
+        },
+        async () => {
+          if (!confirm(`Delete team "${team.name}" and its scores?`)) return;
+          await adminApi('DELETE', `/api/teams/${team._id}`);
+          await Promise.all([loadTeams(), loadScores()]);
+        }
+      )
     );
-    item.append(left, del);
-    list.append(item);
   }
 }
 
@@ -240,107 +217,97 @@ $('team-form').addEventListener('submit', (e) => {
   e.preventDefault();
   safely(async () => {
     const members = $('team-members').value.split(',').map((m) => m.trim()).filter(Boolean);
-    await api('POST', `/api/events/${selectedEvent._id}/teams`, { name: $('team-name').value, members });
+    const team = await adminApi('POST', `/api/events/${selectedEvent._id}/teams`, { name: $('team-name').value, members });
     $('team-name').value = '';
     $('team-members').value = '';
+    showCode(`team ${team.name}`, team.code);
     await loadTeams();
   });
 });
 
-// ---------- judges ----------
-
+// ---------- Judges ----------
 async function loadJudges() {
-  const judges = await api('GET', `/api/events/${selectedEvent._id}/judges`);
+  const judges = await adminApi('GET', `/api/events/${selectedEvent._id}/judges`);
+  $('stat-judges').textContent = judges.length;
   const list = $('judge-list');
   list.replaceChildren();
-  if (judges.length === 0) list.append(el('p', 'No judges yet.', 'muted'));
+  if (judges.length === 0) list.append(el('div', 'No judges yet. Add the first one above.', 'empty'));
+
   for (const judge of judges) {
-    const item = el('div', null, 'list-item');
-    const del = el('button', 'Delete', 'danger small');
-    del.addEventListener('click', () =>
-      safely(async () => {
-        if (!confirm(`Delete judge "${judge.name}" and all their scores?`)) return;
-        await api('DELETE', `/api/judges/${judge._id}`);
-        await loadJudges();
-        await loadScores();
-      })
+    list.append(
+      listRow(
+        judge.name,
+        '',
+        async () => {
+          const res = await adminApi('POST', `/api/judges/${judge._id}/reset-code`);
+          showCode(`judge ${res.name}`, res.code);
+        },
+        async () => {
+          if (!confirm(`Delete judge "${judge.name}" and all their scores?`)) return;
+          await adminApi('DELETE', `/api/judges/${judge._id}`);
+          await Promise.all([loadJudges(), loadScores()]);
+        }
+      )
     );
-    item.append(el('strong', judge.name), del);
-    list.append(item);
   }
 }
 
 $('judge-form').addEventListener('submit', (e) => {
   e.preventDefault();
   safely(async () => {
-    const judge = await api('POST', `/api/events/${selectedEvent._id}/judges`, { name: $('judge-name').value });
+    const judge = await adminApi('POST', `/api/events/${selectedEvent._id}/judges`, { name: $('judge-name').value });
     $('judge-name').value = '';
-    // The plain code is only available in this one response - show it clearly.
-    const box = $('new-judge-code');
-    box.replaceChildren(
-      el('div', `Access code for ${judge.name}:`, 'muted'),
-      el('div', judge.code, 'code-box'),
-      el('div', 'Copy it now. It is stored only as a hash and will NOT be shown again.', 'muted')
-    );
-    box.classList.remove('hidden');
+    showCode(`judge ${judge.name}`, judge.code);
     await loadJudges();
   });
 });
 
-// ---------- scores ----------
-
+// ---------- Scores ----------
 async function loadScores() {
-  const scores = await api('GET', `/api/events/${selectedEvent._id}/scores`);
+  const scores = await adminApi('GET', `/api/events/${selectedEvent._id}/scores`);
+  $('stat-scores').textContent = scores.length;
+  $('stat-avg').textContent = scores.length ? (scores.reduce((s, x) => s + x.total, 0) / scores.length).toFixed(2) : '-';
+
   const table = $('score-table');
   table.replaceChildren();
   if (scores.length === 0) {
-    table.append(el('caption', 'No scores yet.', 'muted'));
+    table.append(el('caption', 'No scores yet.', 'empty'));
     return;
   }
   const head = el('tr');
-  const keys = selectedEvent.rubric.map((r) => r.key);
-  for (const title of ['Team', 'Judge', ...selectedEvent.rubric.map((r) => r.label), 'Total', 'Comment']) {
-    head.append(el('th', title));
-  }
+  for (const title of ['Team', 'Judge', ...selectedEvent.rubric.map((r) => r.label), 'Total', 'Comment']) head.append(el('th', title));
   table.append(head);
   for (const s of scores) {
     const row = el('tr');
     row.append(el('td', s.teamName), el('td', s.judgeName));
-    for (const key of keys) row.append(el('td', s.criteria[key]));
-    row.append(el('td', s.total, 'score-big'), el('td', s.comment, 'muted'));
+    for (const r of selectedEvent.rubric) row.append(el('td', s.criteria[r.key]));
+    const total = el('td');
+    total.append(el('strong', s.total));
+    row.append(total, el('td', s.comment, 'muted small'));
     table.append(row);
   }
 }
-
 $('refresh-scores').addEventListener('click', () => safely(loadScores));
 
 // ---------- AI feedback ----------
-
-function renderFeedback(items) {
+async function loadFeedback() {
+  const items = await adminApi('GET', `/api/events/${selectedEvent._id}/feedback`);
   const list = $('feedback-list');
   list.replaceChildren();
   for (const f of items) {
     const card = el('div', null, 'card feedback-card');
     const title = el('h3', f.teamName);
-    title.append(' ', el('span', `${f.sentiment.label} (${f.sentiment.score})`, `pill ${f.sentiment.label}`));
-    if (f.source === 'mock') title.append(' ', el('span', 'mock', 'pill mock'));
-    card.append(title, el('p', f.summary));
-    if (f.strengths.length) {
+    title.append(badge(`${f.sentiment.label} ${f.sentiment.score}`, f.sentiment.label));
+    if (f.source === 'mock') title.append(badge('mock'));
+    card.append(title, el('p', f.summary, 'muted'));
+    for (const [heading, points] of [['Strengths', f.strengths], ['Improvements', f.improvements]]) {
+      if (points.length === 0) continue;
       const ul = el('ul');
-      f.strengths.forEach((s) => ul.append(el('li', s)));
-      card.append(el('strong', 'Strengths'), ul);
-    }
-    if (f.improvements.length) {
-      const ul = el('ul');
-      f.improvements.forEach((s) => ul.append(el('li', s)));
-      card.append(el('strong', 'Improvements'), ul);
+      points.forEach((p) => ul.append(el('li', p)));
+      card.append(el('strong', heading), ul);
     }
     list.append(card);
   }
-}
-
-async function loadFeedback() {
-  renderFeedback(await api('GET', `/api/events/${selectedEvent._id}/feedback`));
 }
 
 $('generate-feedback').addEventListener('click', () =>
@@ -349,15 +316,24 @@ $('generate-feedback').addEventListener('click', () =>
     btn.disabled = true;
     btn.textContent = 'Generating... (one team at a time)';
     try {
-      const result = await api('POST', `/api/events/${selectedEvent._id}/feedback/generate`);
-      showMessage(`Feedback generated for ${result.generated} team(s)`);
+      const result = await adminApi('POST', `/api/events/${selectedEvent._id}/feedback/generate`);
+      toast(`Feedback generated for ${result.generated} team(s)`);
       await loadFeedback();
     } finally {
-      btn.disabled = false;
-      btn.textContent = 'Generate feedback';
+      btn.disabled = selectedEvent.status !== 'closed';
+      btn.textContent = '✨ Generate feedback';
     }
   })
 );
 
-// ---------- start ----------
-if (token) showApp();
+// ---------- Start ----------
+if (isDemo) {
+  // Hide what the demo admin is not allowed to do, and open the demo event straight away.
+  $('demo-banner').classList.remove('hidden');
+  $('new-event-btn').classList.add('hidden');
+  $('delete-event-btn').classList.add('hidden');
+  safely(() => selectEvent(tokenPayload('admin').demoEventId));
+} else {
+  showPanel('welcome');
+  safely(loadEvents);
+}

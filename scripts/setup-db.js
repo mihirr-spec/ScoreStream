@@ -42,6 +42,8 @@ const validators = {
         // NOTE: "weights must sum to 1" cannot be expressed in $jsonSchema,
         // so the API checks that rule in Node (Phase 2).
         createdAt: { bsonType: 'date' },
+        // Optional: true only for the shared demo event (see services/demo.js).
+        demo: { bsonType: 'bool' },
       },
     },
   },
@@ -54,6 +56,8 @@ const validators = {
         eventId: { bsonType: 'objectId' }, // reference to events._id
         name: { bsonType: 'string', minLength: 1 },
         members: { bsonType: 'array', items: { bsonType: 'string' } },
+        // Optional: SHA-256 of the team's access code (used for team login).
+        codeHash: { bsonType: 'string', pattern: '^[a-f0-9]{64}$' },
       },
     },
   },
@@ -153,6 +157,9 @@ const indexes = {
   ],
   teams: [
     { key: { eventId: 1 }, options: { name: 'eventId_1' } },
+    // Team login looks a team up by its code hash. "sparse" = teams without a
+    // codeHash are left out of the index, so they don't clash with each other.
+    { key: { codeHash: 1 }, options: { unique: true, sparse: true, name: 'unique_codeHash' } },
   ],
   judges: [
     { key: { eventId: 1 }, options: { name: 'eventId_1' } },
@@ -169,7 +176,11 @@ const indexes = {
     // One feedback document per team per event. Re-generating REPLACES it (upsert).
     { key: { eventId: 1, teamId: 1 }, options: { unique: true, name: 'unique_event_team' } },
   ],
-  // events only needs the automatic _id index (we always look events up by _id).
+  events: [
+    // PARTIAL unique index: only documents with demo: true are indexed, so at most
+    // ONE demo event can exist, even if two visitors start the demo at the same moment.
+    { key: { demo: 1 }, options: { unique: true, partialFilterExpression: { demo: true }, name: 'unique_demo_event' } },
+  ],
 };
 
 async function setupCollection(db, name, validator) {

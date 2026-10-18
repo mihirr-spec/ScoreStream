@@ -2,7 +2,7 @@
 
 const express = require('express');
 const { getDb } = require('../db');
-const { requireAdmin } = require('../middleware/auth');
+const { requireAdmin, assertEventAccess } = require('../middleware/auth');
 const { httpError, parseId } = require('../middleware/validate');
 const { generateTeamFeedback, usingRealAi } = require('../services/ai');
 
@@ -16,6 +16,7 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 router.post('/events/:eventId/feedback/generate', requireAdmin, async (req, res) => {
   const db = getDb();
   const eventId = parseId(req.params.eventId, 'event id');
+  assertEventAccess(req, eventId);
 
   const event = await db.collection('events').findOne({ _id: eventId });
   if (!event) throw httpError(404, 'Event not found');

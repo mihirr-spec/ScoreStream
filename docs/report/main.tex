@@ -1,0 +1,627 @@
+\documentclass[11pt,a4paper]{article}
+
+% ---------------- Packages ----------------
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{caption}
+\usepackage{float}
+\usepackage{fancyhdr}
+\usepackage[hidelinks]{hyperref}
+
+\setlist{itemsep=2pt,topsep=4pt}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt}
+\renewcommand{\arraystretch}{1.3}
+\captionsetup{font=small,labelfont=bf}
+
+% Plain code boxes: light grey fill, thin black frame, no syntax colours
+\lstset{
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{gray!8},
+  frame=single,
+  rulecolor=\color{black},
+  breaklines=true,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+  aboveskip=8pt,
+  belowskip=8pt
+}
+
+% Header / footer
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small Live Event Judging and Leaderboard System}
+\fancyhead[R]{\small NoSQL Databases (AIM3141)}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% Screenshot helper: shows the image if it exists, otherwise an empty framed box
+% (so the document still compiles before the images are uploaded to Overleaf).
+\newcommand{\screenshot}[2]{%
+  \IfFileExists{#1}{%
+    \includegraphics[width=\linewidth]{#1}%
+  }{%
+    \fbox{\parbox[c][4cm][c]{0.9\linewidth}{\centering\small Screenshot: #2\\(upload \texttt{#1})}}%
+  }%
+}
+
+\begin{document}
+
+% =====================================================================
+% TITLE PAGE
+% =====================================================================
+\begin{titlepage}
+\thispagestyle{empty}
+\centering
+
+{\Large \textbf{MANIPAL UNIVERSITY JAIPUR}\par}
+\vspace{4pt}
+{\large School of Computer Science and Engineering\par}
+\vspace{2pt}
+{\normalsize Department of Artificial Intelligence and Machine Learning\par}
+
+\vspace{1.6cm}
+
+{\large \underline{\textbf{PROJECT REPORT}}\par}
+
+\vspace{1.2cm}
+
+\rule{\textwidth}{1.2pt}\par
+\vspace{0.5cm}
+{\Huge \textbf{Live Event Judging and}\par}
+\vspace{0.25cm}
+{\Huge \textbf{Leaderboard System}\par}
+\vspace{0.5cm}
+{\Large MongoDB with AI-Generated Feedback\par}
+\vspace{0.4cm}
+\rule{\textwidth}{1.2pt}\par
+
+\vspace{1.4cm}
+
+{\large \textbf{Subject:} NoSQL Databases\par}
+\vspace{6pt}
+{\large \textbf{Subject Code:} AIM3141\par}
+\vspace{6pt}
+{\large \textbf{Programme:} B.Tech (AI \& ML), 5th Semester\par}
+
+\vspace{1.6cm}
+
+{\large \underline{\textbf{Submitted By}}\par}
+\vspace{0.4cm}
+\begin{tabular}{l@{\hspace{1.5cm}}l}
+\textbf{Name} & \textbf{Registration No.} \\[2pt]
+\hline
+Mihir Sanghvi   & 2427010544 \\
+Aryaman Sharma  & 2427010058 \\
+Satyam          & 2427010552 \\
+\end{tabular}
+
+\vspace{1.4cm}
+
+{\large \underline{\textbf{Submitted To}}\par}
+\vspace{0.3cm}
+{\large Dr.\ Arunangshu Pal\par}
+
+\vfill
+
+{\large Manipal University Jaipur\par}
+\vspace{4pt}
+{\normalsize October 2026\par}
+
+\end{titlepage}
+
+% =====================================================================
+% CONTENTS
+% =====================================================================
+\tableofcontents
+\newpage
+
+% =====================================================================
+\section{Problem Identification and Real-World Relevance}
+% =====================================================================
+
+\subsection{Problem Statement}
+At college fests, hackathons and competitions, judging is usually done on paper or in shared spreadsheets. Marks are added up by hand, results are announced late, mistakes creep in, and the judges' written comments are rarely passed on to the teams. Different events also use different marking schemes, which makes one fixed spreadsheet or table awkward to reuse.
+
+This project builds a \textbf{Live Event Judging and Leaderboard System}. Judges submit scores from any device, a leaderboard updates instantly for everyone watching, and an AI model turns the judges' comments into short, useful feedback for every team.
+
+\subsection{Real-World Relevance}
+\begin{itemize}
+  \item \textbf{Speed:} results are available the moment the last judge submits, instead of after a manual tally.
+  \item \textbf{Accuracy:} totals and ranks are calculated by the database, removing arithmetic and copy-paste errors.
+  \item \textbf{Fairness:} the system blocks a judge from scoring the same team twice and rejects out-of-range marks.
+  \item \textbf{Transparency:} teams receive a written summary of what the judges liked and what to improve.
+  \item \textbf{Reusability:} every event can define its own marking scheme without any change to the code or database structure.
+\end{itemize}
+
+\subsection{Objectives}
+\begin{itemize}
+  \item Let an admin create events, each with its own marking scheme (rubric).
+  \item Let judges submit and edit scores for teams in real time.
+  \item Show a live leaderboard that updates without refreshing the page.
+  \item Prevent mistakes such as double scoring or out-of-range marks.
+  \item Use an LLM to summarise judge comments and analyse sentiment for each team.
+\end{itemize}
+
+\subsection{Scope}
+\textbf{Included:} event, team and judge management, score entry, live leaderboard, and AI feedback.\\
+\textbf{Not included:} ticketing, payments, and large-scale production deployment.
+
+% =====================================================================
+\section{NoSQL Database Selection and Justification}
+% =====================================================================
+
+\subsection{Why NoSQL Instead of a Relational Database}
+\begin{itemize}
+  \item \textbf{Flexible marking schemes.} Each event can judge on different criteria (for example Innovation and Impact for one event; Creativity, Teamwork and Presentation for another). In a relational database this needs many nullable columns, extra tables or schema changes for every new event. In a document database each score simply stores the criteria that event uses.
+  \item \textbf{Natural fit for the data.} A score with its marks, comment and AI sentiment is one self-contained document, read and written in a single operation without joins.
+  \item \textbf{Real-time updates are built in.} MongoDB Change Streams notify the application when data changes. A relational database would need polling, triggers or external tools.
+  \item \textbf{Semi-structured AI output.} Summaries, sentiment results and free-text comments vary in size and shape, which suits documents.
+\end{itemize}
+
+\subsection{Why MongoDB Among NoSQL Databases}
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{l l X}
+\toprule
+\textbf{Type} & \textbf{Example} & \textbf{Why it fits less well here} \\
+\midrule
+Key-value   & Redis, DynamoDB & Very fast, but weak for rich queries and aggregations over scores. \\
+Wide-column & Cassandra       & Built for huge write volumes and query-first modelling; overkill for an event with a few judges. \\
+Graph       & Neo4j           & Best for relationship-heavy data, which this project is not. \\
+Document    & MongoDB         & \textbf{Best match} for JSON-like data whose structure varies. \\
+\bottomrule
+\end{tabularx}
+\caption{Comparison of NoSQL database types for this project.}
+\end{table}
+
+MongoDB was chosen because it offers \textbf{Change Streams} for live updates, a powerful \textbf{aggregation pipeline} for totals and ranking, \texttt{\$jsonSchema} \textbf{validation} for controlled flexibility, strong Node.js drivers, and a free \textbf{Atlas} tier that provides the replica set Change Streams need.
+
+\subsection{Limitations (Honest Comparison)}
+A relational database such as PostgreSQL with JSONB could also build this system, and relational databases are stronger for strict integrity and complex multi-table joins. Redis could be added later as a cache for very fast leaderboard reads. These trade-offs are acceptable here because the project needs flexibility and real-time updates more than complex joins.
+
+% =====================================================================
+\section{Database Design and Data Modeling}
+% =====================================================================
+
+\subsection{Collections}
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{l X}
+\toprule
+\textbf{Collection} & \textbf{Purpose} \\
+\midrule
+\texttt{events}      & One document per event, including its rubric and status (\texttt{draft}, \texttt{live}, \texttt{closed}). \\
+\texttt{teams}       & Teams taking part in an event, with their member names. \\
+\texttt{judges}      & Judges assigned to an event; access codes are stored only as SHA-256 hashes. \\
+\texttt{scores}      & One document per judge per team. \\
+\texttt{leaderboard} & Precomputed averages and ranks used by the live display. \\
+\texttt{feedback}    & AI-generated summary, strengths, improvements and sentiment per team. \\
+\bottomrule
+\end{tabularx}
+\caption{Collections in the \texttt{judging\_system} database.}
+\end{table}
+
+\subsection{Sample Documents}
+\textbf{Event with its own rubric (embedded):}
+\begin{lstlisting}
+{
+  _id: ObjectId('...'),
+  name: 'Hackathon 2026',
+  status: 'live',
+  rubric: [
+    { key: 'innovation', label: 'Innovation', max: 10, weight: 0.3 },
+    { key: 'impact',     label: 'Impact',     max: 10, weight: 0.4 },
+    { key: 'demo',       label: 'Demo',       max: 10, weight: 0.3 }
+  ],
+  createdAt: ISODate('...')
+}
+\end{lstlisting}
+
+\textbf{Score (the criteria keys follow that event's rubric):}
+\begin{lstlisting}
+{
+  eventId: ObjectId('...'),
+  teamId:  ObjectId('...'),
+  judgeId: ObjectId('...'),
+  criteria: { innovation: 8, impact: 7, demo: 9 },
+  total: 7.9,
+  comment: 'Strong idea, demo needed more polish',
+  submittedAt: ISODate('...')
+}
+\end{lstlisting}
+
+The \textbf{total} is always out of 10 and is calculated by the backend as a weighted sum:
+\[
+\text{total} = 10 \times \sum_{i} \frac{\text{mark}_i}{\text{max}_i} \times \text{weight}_i
+\]
+For the sample above: $10 \times (0.8 \times 0.3 + 0.7 \times 0.4 + 0.9 \times 0.3) = 7.9$.
+
+\textbf{Feedback (AI output):}
+\begin{lstlisting}
+{
+  eventId: ObjectId('...'),
+  teamId:  ObjectId('...'),
+  summary: 'Judges liked the idea and the clear pitch ...',
+  strengths:    ['Original idea', 'Clear presentation'],
+  improvements: ['Polish the live demo'],
+  sentiment: { label: 'positive', score: 0.7 },
+  source: 'ai',
+  generatedAt: ISODate('...')
+}
+\end{lstlisting}
+
+\subsection{Embedding versus Referencing}
+\begin{itemize}
+  \item The \textbf{rubric is embedded} inside \texttt{events} because it is always read together with the event and is small.
+  \item \textbf{Scores reference} \texttt{eventId}, \texttt{teamId} and \texttt{judgeId} because there are many scores per event and they grow quickly. Embedding them would create very large documents that many judges would be writing to at the same time.
+  \item \textbf{Leaderboard and feedback} are separate collections keyed by \texttt{eventId + teamId}, so each can be rebuilt or replaced without touching the original scores.
+\end{itemize}
+
+\subsection{Access Patterns and Scalability}
+The two most frequent operations are reading the leaderboard of an event (read-heavy) and a judge submitting a score (write). For this reason the ranked results are stored in a separate \texttt{leaderboard} collection instead of being recalculated on every page load. Indexes on \texttt{eventId} keep queries fast as data grows, and collections can be sharded by \texttt{eventId} if the system ever needs to scale across many events.
+
+% =====================================================================
+\section{NoSQL Database Implementation and CRUD Operations}
+% =====================================================================
+
+\subsection{CRUD Summary}
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{l X l}
+\toprule
+\textbf{Operation} & \textbf{Feature in the application} & \textbf{Example} \\
+\midrule
+Create & Add event, team, judge, score            & \texttt{insertOne} on \texttt{scores} \\
+Read   & View leaderboard, a team's scores and comments & \texttt{find(\{ eventId \})} \\
+Update & Judge edits a submitted score            & \texttt{findOneAndUpdate} with \texttt{\$set} \\
+Delete & Remove a team or an incorrect entry      & \texttt{deleteOne} \\
+\bottomrule
+\end{tabularx}
+\caption{CRUD operations used in the system.}
+\end{table}
+
+All operations are stored permanently in MongoDB Atlas, so data remains available after the application restarts.
+
+\subsection{Create: Submitting a Score}
+The judge's marks are first checked against the event rubric, then the score is inserted. If the same judge has already scored the team, MongoDB rejects the insert with a duplicate key error (code \texttt{11000}), which the API turns into a clear message.
+\begin{lstlisting}
+try {
+  await db.collection('scores').insertOne(score);
+} catch (err) {
+  if (err.code === 11000) {
+    throw httpError(409, 'You have already scored this team.');
+  }
+  throw err;
+}
+\end{lstlisting}
+
+\subsection{Update: Editing a Score}
+The filter includes \texttt{judgeId}, so a judge can only ever edit their own score.
+\begin{lstlisting}
+db.collection('scores').findOneAndUpdate(
+  { _id: scoreId, judgeId: judge._id, eventId: event._id },
+  { $set: { criteria, total, comment, submittedAt: new Date() } },
+  { returnDocument: 'after' }
+);
+\end{lstlisting}
+
+\subsection{REST API Endpoints}
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{l l X}
+\toprule
+\textbf{Method} & \textbf{Route} & \textbf{Purpose (access)} \\
+\midrule
+POST   & \texttt{/api/auth/admin-login}            & Admin login, returns a token \\
+POST   & \texttt{/api/auth/judge-login}            & Judge login with access code \\
+POST   & \texttt{/api/events}                      & Create event with rubric (admin) \\
+PATCH  & \texttt{/api/events/:id}                  & Change status, e.g.\ close event (admin) \\
+POST   & \texttt{/api/events/:id/teams}            & Add a team (admin) \\
+POST   & \texttt{/api/events/:id/judges}           & Add a judge (admin) \\
+POST   & \texttt{/api/scores}                      & Submit a score (judge) \\
+PUT    & \texttt{/api/scores/:id}                  & Edit own score (judge) \\
+GET    & \texttt{/api/events/:id/leaderboard}      & Current leaderboard (public) \\
+GET    & \texttt{/api/events/:id/stream}           & Live updates via SSE (public) \\
+POST   & \texttt{/api/events/:id/feedback/generate}& Generate AI feedback (admin) \\
+GET    & \texttt{/api/events/:id/feedback}         & Read AI feedback (public) \\
+\bottomrule
+\end{tabularx}
+\caption{Main API routes.}
+\end{table}
+
+% =====================================================================
+\section{Advanced NoSQL Features and Query Optimization}
+% =====================================================================
+
+\subsection{Change Streams (Real-Time Listener)}
+A Change Stream watches the \texttt{scores} collection. Whenever a score is inserted, updated, replaced or deleted, the leaderboard is recalculated and pushed to all connected screens. The score routes never update the leaderboard themselves; they only write to \texttt{scores}, and the Change Stream does the rest.
+\begin{lstlisting}
+const stream = db.collection('scores').watch(
+  [{ $match: { operationType:
+       { $in: ['insert', 'update', 'replace', 'delete'] } } }],
+  { fullDocument: 'updateLookup' }
+);
+
+stream.on('change', async (change) => {
+  await recomputeLeaderboard(change.fullDocument.eventId);
+  broadcastToClients(change.fullDocument.eventId);
+});
+\end{lstlisting}
+
+Important design points:
+\begin{itemize}
+  \item Change Streams read the replica set's \textbf{oplog}, which is why a replica set is needed (every Atlas cluster is one).
+  \item \texttt{fullDocument: 'updateLookup'} returns the whole updated document, so the event ID is always known.
+  \item Changes are processed \textbf{one at a time in order}, so two recalculations of the same event never race each other.
+  \item The handler writes only to \texttt{leaderboard}, never to \texttt{scores}, so it cannot trigger itself in an endless loop.
+\end{itemize}
+
+\subsection{Aggregation Pipeline}
+The leaderboard is calculated entirely inside the database: scores are grouped by team, averaged across judges, joined with team names, ranked, and written into the \texttt{leaderboard} collection with \texttt{\$merge}.
+\begin{lstlisting}
+db.scores.aggregate([
+  { $match: { eventId: eventId } },
+  { $group: { _id: '$teamId',
+              avgScore: { $avg: '$total' },
+              judgesCount: { $sum: 1 } } },
+  { $set: { avgScore: { $round: ['$avgScore', 2] } } },
+  { $lookup: { from: 'teams', localField: '_id',
+               foreignField: '_id', as: 'team' } },
+  { $unwind: '$team' },
+  { $setWindowFields: { sortBy: { avgScore: -1 },
+                        output: { rank: { $rank: {} } } } },
+  { $merge: { into: 'leaderboard', on: ['eventId', 'teamId'],
+              whenMatched: 'replace', whenNotMatched: 'insert' } }
+]);
+\end{lstlisting}
+
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{l X}
+\toprule
+\textbf{Stage} & \textbf{What it does} \\
+\midrule
+\texttt{\$match}           & Keeps only this event's scores; placed first so it uses the \texttt{eventId} index. \\
+\texttt{\$group}           & One row per team: average total and number of judges. \\
+\texttt{\$lookup}          & Joins the \texttt{teams} collection to get each team's name. \\
+\texttt{\$setWindowFields} & Ranks teams with \texttt{\$rank}, so tied teams share a rank (1, 2, 2, 4). \\
+\texttt{\$merge}           & Inserts or replaces each team's row in \texttt{leaderboard}. \\
+\bottomrule
+\end{tabularx}
+\caption{Stages of the leaderboard pipeline.}
+\end{table}
+
+\subsection{Indexing and Query Optimization}
+\begin{itemize}
+  \item A \textbf{unique compound index} on \texttt{eventId + teamId + judgeId} prevents a judge from scoring the same team twice. Because the database enforces it, the rule holds even if two requests arrive at the same moment.
+  \item An index on \texttt{eventId} speeds up leaderboard and score queries.
+  \item A unique index on \texttt{eventId + teamId} in \texttt{leaderboard} and \texttt{feedback} keeps one row per team and is required by \texttt{\$merge}.
+  \item A unique index on \texttt{codeHash} in \texttt{judges} gives fast judge login and guarantees no two judges share a code.
+  \item \texttt{explain()} is used to compare query performance before and after indexing, confirming a move from a collection scan to an index scan.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{X l l}
+\toprule
+\textbf{Query: \texttt{scores.find(\{ eventId \})}} & \textbf{Without index} & \textbf{With index} \\
+\midrule
+Plan stage              & \texttt{COLLSCAN} & \texttt{IXSCAN} (\texttt{eventId\_1}) \\
+Documents examined      & All scores in the collection & Only that event's scores \\
+Effect as data grows    & Slower with every new score & Stays fast \\
+\bottomrule
+\end{tabularx}
+\caption{Effect of the \texttt{eventId} index, measured with \texttt{explain('executionStats')}.}
+\end{table}
+
+\subsection{AI Feature}
+When an event closes, the admin generates feedback. All comments for a team are sent to an LLM (through the OpenRouter API), which returns a short summary, a list of strengths and improvements, and a sentiment label with a score from $-1$ to $1$. The result is stored in the \texttt{feedback} collection and shown to the team.
+
+To make the feature reliable:
+\begin{itemize}
+  \item The model is asked to reply in \textbf{strict JSON}; the reply is cleaned and checked so it always matches the \texttt{feedback} schema.
+  \item Each model gets one retry, and a \textbf{fallback model} is tried if the main one fails.
+  \item If no API key is set or every attempt fails, a clearly labelled \textbf{mock} result is saved (\texttt{source: 'mock'}), so the demo also works offline.
+\end{itemize}
+
+% =====================================================================
+\section{Application Integration and Functionality}
+% =====================================================================
+
+\subsection{Architecture}
+Browser clients (Admin, Judge and Leaderboard pages) talk to a Node.js and Express backend, which owns all access to MongoDB Atlas. The backend also listens to the Change Stream and pushes updates to browsers using \textbf{Server-Sent Events (SSE)}, and calls the LLM API for feedback.
+
+\begin{figure}[H]
+\centering
+\fbox{\parbox[c][1.6cm][c]{3.6cm}{\centering \textbf{Browser}\\[2pt]\footnotesize Admin / Judge / Leaderboard}}
+\;$\longleftrightarrow$\;
+\fbox{\parbox[c][1.6cm][c]{4.2cm}{\centering \textbf{Node.js + Express}\\[2pt]\footnotesize API, validation, SSE, LLM client}}
+\;$\longleftrightarrow$\;
+\fbox{\parbox[c][1.6cm][c]{3.6cm}{\centering \textbf{MongoDB Atlas}\\[2pt]\footnotesize replica set, 6 collections}}
+\caption{Three-tier architecture with the backend listening to the \texttt{scores} Change Stream.}
+\end{figure}
+
+\subsection{Live Update Flow}
+\begin{enumerate}
+  \item A judge submits a score from the Judge page.
+  \item The API validates the marks and inserts the document into \texttt{scores}.
+  \item The Change Stream receives the insert event from MongoDB.
+  \item The aggregation pipeline recalculates the event's leaderboard and saves it with \texttt{\$merge}.
+  \item The new leaderboard is sent over SSE to every open Leaderboard page, which updates without a refresh.
+\end{enumerate}
+
+\subsection{Technology Stack}
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{l X}
+\toprule
+\textbf{Layer} & \textbf{Technology} \\
+\midrule
+Frontend  & HTML, CSS and plain JavaScript (Admin, Judge, Leaderboard pages) \\
+Backend   & Node.js 20, Express 5, official MongoDB Node.js driver \\
+Database  & MongoDB Atlas (replica set) \\
+Real-time & MongoDB Change Streams + Server-Sent Events \\
+Security  & JSON Web Tokens, SHA-256 hashed judge codes, \texttt{.env} secrets \\
+AI        & LLM via OpenRouter (OpenAI-compatible chat API) \\
+\bottomrule
+\end{tabularx}
+\caption{Technology stack.}
+\end{table}
+
+\subsection{Main Screens}
+\begin{itemize}
+  \item \textbf{Admin page:} create events and rubrics, add teams and judges, close an event, view all scores and generate AI feedback.
+  \item \textbf{Judge page:} choose a team, enter marks per criterion, add a comment, and edit a submitted score.
+  \item \textbf{Live leaderboard:} ranked teams that update instantly, plus AI feedback after the event.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}[t]{0.48\textwidth}\centering
+\screenshot{img/admin.png}{Admin page}\\[2pt]
+{\small (a) Admin page}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.48\textwidth}\centering
+\screenshot{img/judge.png}{Judge page}\\[2pt]
+{\small (b) Judge page}
+\end{minipage}
+\caption{Admin page for events, rubrics, teams and judges; Judge page for entering marks.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}[t]{0.48\textwidth}\centering
+\screenshot{img/leaderboard.png}{Live leaderboard}\\[2pt]
+{\small (a) Live leaderboard}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.48\textwidth}\centering
+\screenshot{img/feedback.png}{AI feedback}\\[2pt]
+{\small (b) AI feedback}
+\end{minipage}
+\caption{Leaderboard updating through Server-Sent Events, and AI-generated team feedback.}
+\end{figure}
+
+\subsection{Error Handling}
+The application shows clear messages for problems such as marks outside the allowed range, scoring the same team twice, missing fields, or a failed database or AI request, instead of crashing.
+
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{X l X}
+\toprule
+\textbf{Situation} & \textbf{HTTP code} & \textbf{Message shown} \\
+\midrule
+Mark outside 0 to max       & 400 & ``Mark for Impact must be between 0 and 10'' \\
+Missing or unknown criterion & 400 & ``Missing mark for Demo'' \\
+Not logged in / bad token   & 401 & ``Please log in first'' \\
+Judge opens admin route     & 403 & ``Admin access only'' \\
+Event not live              & 403 & ``Scoring is closed'' \\
+Same team scored twice      & 409 & ``You have already scored this team'' \\
+AI request fails            & --  & Fallback model, then labelled mock feedback \\
+\bottomrule
+\end{tabularx}
+\caption{Error handling examples.}
+\end{table}
+
+% =====================================================================
+\section{Testing, Security, and Data Validation}
+% =====================================================================
+
+\subsection{Data Validation}
+\begin{itemize}
+  \item \texttt{\$jsonSchema} validation on the collections keeps required fields and data types correct while still allowing flexible criteria. Validators use \texttt{validationLevel: 'strict'} and \texttt{validationAction: 'error'}, so the database itself rejects a bad document.
+  \item The backend checks that each mark lies between 0 and the maximum defined in the event's rubric, and that rubric weights add up to 1.
+\end{itemize}
+
+\textbf{Validator on the \texttt{scores} collection:}
+\begin{lstlisting}
+$jsonSchema: {
+  bsonType: 'object',
+  required: ['eventId', 'teamId', 'judgeId',
+             'criteria', 'total', 'submittedAt'],
+  properties: {
+    eventId:  { bsonType: 'objectId' },
+    teamId:   { bsonType: 'objectId' },
+    judgeId:  { bsonType: 'objectId' },
+    criteria: { bsonType: 'object',
+                additionalProperties: { bsonType: 'number' } },
+    total:    { bsonType: 'number', minimum: 0, maximum: 10 },
+    comment:  { bsonType: 'string' },
+    submittedAt: { bsonType: 'date' }
+  }
+}
+\end{lstlisting}
+Here \texttt{criteria} may hold \textbf{any} keys (because they depend on the event's rubric), but every value must be a number. This is the ``controlled flexibility'' that a document database allows.
+
+\subsection{Security}
+\begin{itemize}
+  \item Judges log in with an access code; only admins can create or close events. Both receive a signed \textbf{JWT} that expires after 12 hours.
+  \item Judge access codes are stored only as \textbf{SHA-256 hashes}, so the real codes cannot be read from the database.
+  \item A judge can only score teams of their own event and edit only their own scores.
+  \item Database credentials and the AI API key are stored in a \texttt{.env} file, never in the source code or the repository.
+  \item All user input is validated on the server before it reaches the database.
+\end{itemize}
+
+\subsection{Test Cases}
+The test cases below are automated with Node's built-in test runner and run against a separate test database.
+
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{c X X c}
+\toprule
+\textbf{No.} & \textbf{Test case} & \textbf{Expected result} & \textbf{Actual result} \\
+\midrule
+1 & Judge submits valid marks            & Score saved, leaderboard updates live & Pass \\
+2 & Marks above the allowed maximum      & Request rejected with an error message & Pass \\
+3 & Same judge scores the same team twice & Blocked by the unique index & Pass \\
+4 & Judge edits a score                  & Total and rank recalculated & Pass \\
+5 & Unauthorized user opens the admin page & Access denied & Pass \\
+6 & Generate AI feedback for a team      & Summary and sentiment saved & Pass \\
+\bottomrule
+\end{tabularx}
+\caption{Test cases and results.}
+\end{table}
+
+
+% =====================================================================
+\section{Conclusion and Future Scope}
+% =====================================================================
+
+\subsection{Conclusion}
+The project shows how MongoDB's flexible schema, Change Streams and aggregation pipeline can solve a real problem in college events. Each event defines its own rubric without any schema change, judges' marks are validated both by the application and by the database, the leaderboard is calculated inside MongoDB and pushed to every screen within moments of a score being saved, and teams receive AI-generated feedback instead of losing the judges' comments.
+
+\subsection{Future Scope}
+\begin{itemize}
+  \item A Redis cache for faster leaderboard reads at large events.
+  \item Per-team public result pages.
+  \item Exporting results and feedback as PDF.
+  \item Richer AI analysis of feedback, such as comparing teams and spotting common weaknesses.
+  \item Sharding by \texttt{eventId} to support many events at once.
+\end{itemize}
+
+% =====================================================================
+\section*{References}
+\addcontentsline{toc}{section}{References}
+% =====================================================================
+\begin{enumerate}
+  \item MongoDB Manual: Change Streams. \url{https://www.mongodb.com/docs/manual/changeStreams/}
+  \item MongoDB Manual: Aggregation Pipeline. \url{https://www.mongodb.com/docs/manual/aggregation/}
+  \item MongoDB Manual: Schema Validation. \url{https://www.mongodb.com/docs/manual/core/schema-validation/}
+  \item MongoDB Manual: Indexes. \url{https://www.mongodb.com/docs/manual/indexes/}
+  \item MDN Web Docs: Server-Sent Events. \url{https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events}
+\end{enumerate}
+
+\end{document}

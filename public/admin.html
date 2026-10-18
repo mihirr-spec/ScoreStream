@@ -3,114 +3,158 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin - Live Judging</title>
+  <title>Admin - ScoreStream</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <header>
-    <h1>Live Judging - Admin</h1>
-    <nav>
-      <a href="admin.html">Admin</a>
-      <a href="judge.html">Judge</a>
-      <a href="leaderboard.html">Leaderboard</a>
-    </nav>
+  <header class="nav">
+    <div class="container nav-inner">
+      <a class="logo" href="index.html">
+        <span class="logo-mark">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 20V12M12 20V5M19 20v-9"/></svg>
+        </span>
+        ScoreStream
+      </a>
+      <div class="nav-actions">
+        <a class="btn btn-ghost btn-sm hide-sm" href="leaderboard.html" target="_blank">Leaderboards</a>
+        <span class="user-chip">🛠️ <span id="user-name">Admin</span></span>
+        <button class="btn btn-ghost btn-sm" id="logout-btn" type="button">Log out</button>
+      </div>
+    </div>
   </header>
 
-  <main>
-    <div id="message" class="message hidden"></div>
+  <main class="app">
+    <div class="container admin-grid">
 
-    <!-- Step 1: log in -->
-    <section id="login-section" class="card">
-      <h2>Admin login</h2>
-      <form id="login-form" class="row">
-        <div>
-          <label for="password">Admin password</label>
-          <input id="password" type="password" required>
-        </div>
-        <button class="shrink" type="submit">Log in</button>
-      </form>
-    </section>
-
-    <!-- Step 2: manage events (shown after login) -->
-    <div id="app-section" class="hidden">
-      <section class="card">
-        <div class="row">
-          <h2 style="margin:0">Events</h2>
-          <button id="logout-btn" class="secondary shrink" type="button">Log out</button>
+      <!-- Left: list of events -->
+      <aside class="card">
+        <div class="card-head">
+          <h3>Events</h3>
+          <button class="btn btn-primary btn-sm" id="new-event-btn" type="button">+ New</button>
         </div>
         <div id="event-list"></div>
-      </section>
+      </aside>
 
-      <section class="card">
-        <h2>Create event</h2>
-        <form id="event-form">
-          <div class="row">
+      <div>
+        <div id="demo-banner" class="demo-banner hidden">
+          <span>⭐ <strong>Demo admin.</strong> You are managing a shared sample event with 3 teams. Your real events are hidden, and creating or deleting events is turned off.</span>
+        </div>
+
+        <!-- Create event -->
+        <section class="card hidden" id="create-panel">
+          <div class="card-head"><h2>Create an event</h2></div>
+          <form id="event-form">
+            <div class="row">
+              <div class="field">
+                <label for="event-name">Event name</label>
+                <input id="event-name" required maxlength="100" placeholder="e.g. Spring Hackathon 2026">
+              </div>
+              <div class="field shrink">
+                <label for="event-status">Start as</label>
+                <select id="event-status">
+                  <option value="draft">Draft</option>
+                  <option value="live">Live</option>
+                </select>
+              </div>
+            </div>
+            <label class="small" style="font-weight:600">Rubric <span class="muted">(key, label, max mark, weight - weights must add up to 1)</span></label>
+            <div id="rubric-rows" style="margin-top:8px"></div>
+            <div class="row" style="align-items:center">
+              <button class="btn btn-ghost btn-sm shrink" id="add-rubric-row" type="button">+ Add criterion</button>
+              <span id="weight-sum" class="muted small"></span>
+              <button class="btn btn-primary shrink" type="submit">Create event</button>
+            </div>
+          </form>
+        </section>
+
+        <!-- Nothing selected yet -->
+        <section class="card empty" id="welcome-panel">
+          <h2>Welcome, organiser 👋</h2>
+          <p>Pick an event on the left, or create a new one to get started.</p>
+        </section>
+
+        <!-- One selected event -->
+        <section class="hidden" id="event-panel">
+          <div class="page-head">
             <div>
-              <label for="event-name">Event name</label>
-              <input id="event-name" required maxlength="100">
+              <h1 id="detail-name"></h1>
+              <div class="sub"><span id="detail-status"></span><span class="muted small" id="detail-rubric"></span></div>
             </div>
-            <div class="shrink">
-              <label for="event-status">Status</label>
-              <select id="event-status">
-                <option value="draft">draft</option>
-                <option value="live">live</option>
-              </select>
+            <div class="row" style="flex:0 0 auto;gap:8px">
+              <div class="seg shrink" id="status-seg">
+                <button data-status="draft" type="button">Draft</button>
+                <button data-status="live" type="button">Live</button>
+                <button data-status="closed" type="button">Closed</button>
+              </div>
+              <a class="btn btn-ghost btn-sm shrink" id="leaderboard-link" target="_blank">Leaderboard ↗</a>
+              <button class="btn btn-danger btn-sm shrink" id="delete-event-btn" type="button">Delete</button>
             </div>
           </div>
-          <label>Rubric (weights must add up to 1)</label>
-          <div id="rubric-rows"></div>
-          <div class="row">
-            <button id="add-rubric-row" class="secondary shrink" type="button">+ Add criterion</button>
-            <span id="weight-sum" class="muted"></span>
-            <button class="shrink" type="submit">Create event</button>
+
+          <div class="stats">
+            <div class="stat"><div class="label">Teams</div><div class="value" id="stat-teams">0</div></div>
+            <div class="stat"><div class="label">Judges</div><div class="value" id="stat-judges">0</div></div>
+            <div class="stat"><div class="label">Scores</div><div class="value" id="stat-scores">0</div></div>
+            <div class="stat"><div class="label">Average total</div><div class="value" id="stat-avg">-</div></div>
           </div>
-        </form>
-      </section>
 
-      <!-- Step 3: one selected event -->
-      <section id="event-detail" class="card hidden">
-        <div class="row">
-          <div>
-            <h2 id="detail-name" style="margin:0"></h2>
-            <span id="detail-status" class="pill"></span>
-            <span id="detail-rubric" class="muted"></span>
+          <!-- Plain code shown ONCE after creating / resetting a judge or team -->
+          <div id="code-box" class="code-box hidden">
+            <div>
+              <div class="small muted" id="code-for"></div>
+              <code id="code-value"></code>
+              <div class="small muted">Copy it now. Only a hash is stored, so it can't be shown again.</div>
+            </div>
+            <button class="btn btn-ghost btn-sm" id="copy-code" type="button">Copy</button>
           </div>
-        </div>
-        <div class="row">
-          <button class="secondary shrink status-btn" data-status="draft" type="button">Set draft</button>
-          <button class="secondary shrink status-btn" data-status="live" type="button">Set live</button>
-          <button class="secondary shrink status-btn" data-status="closed" type="button">Close event</button>
-          <a id="leaderboard-link" class="shrink" target="_blank">Open leaderboard &rarr;</a>
-          <button id="delete-event-btn" class="danger shrink" type="button">Delete event</button>
-        </div>
 
-        <h3>Teams</h3>
-        <form id="team-form" class="row">
-          <div><label for="team-name">Team name</label><input id="team-name" required maxlength="100"></div>
-          <div><label for="team-members">Members (comma separated)</label><input id="team-members"></div>
-          <button class="shrink" type="submit">Add team</button>
-        </form>
-        <div id="team-list"></div>
+          <div class="card">
+            <div class="tabs">
+              <button class="tab active" data-tab="teams" type="button">Teams</button>
+              <button class="tab" data-tab="judges" type="button">Judges</button>
+              <button class="tab" data-tab="scores" type="button">Scores</button>
+              <button class="tab" data-tab="feedback" type="button">AI feedback</button>
+            </div>
 
-        <h3>Judges</h3>
-        <form id="judge-form" class="row">
-          <div><label for="judge-name">Judge name</label><input id="judge-name" required maxlength="100"></div>
-          <button class="shrink" type="submit">Add judge</button>
-        </form>
-        <div id="new-judge-code" class="hidden"></div>
-        <div id="judge-list"></div>
+            <div data-panel="teams">
+              <form id="team-form" class="row">
+                <div class="field"><label for="team-name">Team name</label><input id="team-name" required maxlength="100"></div>
+                <div class="field"><label for="team-members">Members (comma separated)</label><input id="team-members" placeholder="Asha, Rohan"></div>
+                <div class="field shrink"><button class="btn btn-primary" type="submit">Add team</button></div>
+              </form>
+              <div id="team-list"></div>
+            </div>
 
-        <h3>Scores <button id="refresh-scores" class="secondary small" type="button">Refresh</button></h3>
-        <div class="table-wrap"><table id="score-table"></table></div>
+            <div data-panel="judges" class="hidden">
+              <form id="judge-form" class="row">
+                <div class="field"><label for="judge-name">Judge name</label><input id="judge-name" required maxlength="100"></div>
+                <div class="field shrink"><button class="btn btn-primary" type="submit">Add judge</button></div>
+              </form>
+              <div id="judge-list"></div>
+            </div>
 
-        <h3>AI feedback</h3>
-        <p class="muted">Available after the event is closed. Generated team by team.</p>
-        <button id="generate-feedback" type="button">Generate feedback</button>
-        <div id="feedback-list"></div>
-      </section>
+            <div data-panel="scores" class="hidden">
+              <div class="card-head"><span class="muted small">Every score, with team and judge names joined by $lookup.</span><button class="btn btn-ghost btn-sm" id="refresh-scores" type="button">Refresh</button></div>
+              <div class="table-wrap"><table id="score-table"></table></div>
+            </div>
+
+            <div data-panel="feedback" class="hidden">
+              <div class="card-head">
+                <span class="muted small" id="feedback-note">Available after the event is closed. Generated one team at a time.</span>
+                <button class="btn btn-primary" id="generate-feedback" type="button">✨ Generate feedback</button>
+              </div>
+              <div class="team-grid" id="feedback-list"></div>
+            </div>
+          </div>
+        </section>
+      </div>
     </div>
   </main>
 
+  <script src="js/common.js"></script>
   <script src="js/admin.js"></script>
 </body>
 </html>

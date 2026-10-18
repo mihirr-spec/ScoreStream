@@ -2,7 +2,7 @@
 
 const express = require('express');
 const { getDb } = require('../db');
-const { requireAdmin } = require('../middleware/auth');
+const { requireAdmin, assertEventAccess, denyDemo } = require('../middleware/auth');
 const {
   httpError,
   parseId,
@@ -16,12 +16,15 @@ const router = express.Router();
 
 // GET /api/events  -> all events, newest first
 router.get('/events', requireAdmin, async (req, res) => {
-  const events = await getDb().collection('events').find().sort({ createdAt: -1 }).toArray();
+  // A demo admin only sees the demo event.
+  const filter = req.demoEventId ? { demo: true } : {};
+  const events = await getDb().collection('events').find(filter).sort({ createdAt: -1 }).toArray();
   res.json(events);
 });
 
 // POST /api/events  { name, rubric, status? }
 router.post('/events', requireAdmin, async (req, res) => {
+  denyDemo(req, 'create new events');
   const { name, rubric, status = 'draft' } = req.body || {};
 
   if (!isNonEmptyString(name, 100)) throw httpError(400, 'name is required (max 100 characters)');
@@ -42,7 +45,9 @@ router.post('/events', requireAdmin, async (req, res) => {
 
 // GET /api/events/:id
 router.get('/events/:id', requireAdmin, async (req, res) => {
-  const event = await getDb().collection('events').findOne({ _id: parseId(req.params.id, 'event id') });
+  const eventId = parseId(req.params.id, 'event id');
+  assertEventAccess(req, eventId);
+  const event = await getDb().collection('events').findOne({ _id: eventId });
   if (!event) throw httpError(404, 'Event not found');
   res.json(event);
 });
@@ -51,6 +56,7 @@ router.get('/events/:id', requireAdmin, async (req, res) => {
 router.patch('/events/:id', requireAdmin, async (req, res) => {
   const db = getDb();
   const eventId = parseId(req.params.id, 'event id');
+  assertEventAccess(req, eventId);
   const { status, rubric } = req.body || {};
   const changes = {};
 
@@ -85,6 +91,7 @@ router.patch('/events/:id', requireAdmin, async (req, res) => {
 // DELETE /api/events/:id  -> deletes the event AND everything that references it.
 // (MongoDB has no "ON DELETE CASCADE" like SQL, so we delete the related documents ourselves.)
 router.delete('/events/:id', requireAdmin, async (req, res) => {
+  denyDemo(req, 'delete the demo event');
   const db = getDb();
   const eventId = parseId(req.params.id, 'event id');
 

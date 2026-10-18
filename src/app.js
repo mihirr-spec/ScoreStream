@@ -14,11 +14,8 @@ const app = express();
 // Parse JSON request bodies into req.body (max 100kb so nobody can send huge bodies).
 app.use(express.json({ limit: '100kb' }));
 
-// Serve the plain HTML/CSS/JS pages from /public.
+// Serve the plain HTML/CSS/JS pages from /public ("/" opens public/index.html, the landing page).
 app.use(express.static(path.join(__dirname, '..', 'public')));
-
-// The site root opens the public leaderboard.
-app.get('/', (req, res) => res.redirect('/leaderboard.html'));
 
 // Health check: proves the server is up AND MongoDB answers.
 app.get('/api/health', async (req, res) => {

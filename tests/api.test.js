@@ -169,6 +169,52 @@ test('5. unauthorized user hits an admin route -> access denied', async () => {
   assert.equal(badToken.status, 401);
 });
 
+test('extra: team logs in with its code and sees its own rank', async () => {
+  // Creating a team returns its access code once (only the hash is stored).
+  const created = await api('POST', `/api/events/${eventId}/teams`, { token: adminToken, body: { name: 'Team C' } });
+  assert.equal(created.status, 201);
+  assert.match(created.body.code, /^[A-F0-9]{8}$/);
+
+  const login = await api('POST', '/api/auth/team-login', { body: { code: created.body.code } });
+  assert.equal(login.status, 200);
+
+  // Team A has scores (tests 1 and 4), so log in as Team A via a fresh code.
+  const reset = await api('POST', `/api/teams/${teamA}/reset-code`, { token: adminToken });
+  const teamToken = (await api('POST', '/api/auth/team-login', { body: { code: reset.body.code } })).body.token;
+  const me = await api('GET', '/api/team/me', { token: teamToken });
+  assert.equal(me.status, 200);
+  assert.equal(me.body.team.name, 'Team A');
+  assert.equal(me.body.standing.rank, 2);
+  assert.equal(me.body.breakdown.length, 3);
+  assert.equal(me.body.feedback, null); // hidden while the event is live
+
+  // A team token must not open admin routes.
+  const denied = await api('GET', '/api/events', { token: teamToken });
+  assert.equal(denied.status, 403);
+});
+
+test('extra: demo accounts are limited to the demo event', async () => {
+  const demoAdmin = (await api('POST', '/api/auth/demo-login', { body: { role: 'admin' } })).body.token;
+  const demoJudge = (await api('POST', '/api/auth/demo-login', { body: { role: 'judge' } })).body.token;
+
+  // The demo judge sees the 3 demo teams and can rate one of them.
+  const me = await api('GET', '/api/judge/me', { token: demoJudge });
+  assert.equal(me.body.teams.length, 3);
+  assert.equal(me.body.event.demo, true);
+  const rated = await api('POST', '/api/scores', {
+    token: demoJudge,
+    body: { teamId: me.body.teams[0]._id, criteria: { innovation: 10, design: 8, execution: 6 }, comment: 'Demo rating' },
+  });
+  assert.equal(rated.status, 201);
+
+  // The demo admin only sees the demo event, and cannot touch the real test event.
+  const list = await api('GET', '/api/events', { token: demoAdmin });
+  assert.equal(list.body.length, 1);
+  assert.equal((await api('GET', `/api/events/${eventId}`, { token: demoAdmin })).status, 403);
+  assert.equal((await api('GET', `/api/events/${eventId}/teams`, { token: demoAdmin })).status, 403);
+  assert.equal((await api('DELETE', `/api/events/${list.body[0]._id}`, { token: demoAdmin })).status, 403);
+});
+
 test('6. generate AI feedback for a team -> summary + sentiment saved (mock)', async () => {
   // Not allowed while the event is still live.
   const tooEarly = await api('POST', `/api/events/${eventId}/feedback/generate`, { token: adminToken });
@@ -177,7 +223,7 @@ test('6. generate AI feedback for a team -> summary + sentiment saved (mock)', a
   await api('PATCH', `/api/events/${eventId}`, { token: adminToken, body: { status: 'closed' } });
   const res = await api('POST', `/api/events/${eventId}/feedback/generate`, { token: adminToken });
   assert.equal(res.status, 200);
-  assert.equal(res.body.generated, 2);
+  assert.equal(res.body.generated, 3); // Team A, Team B and Team C (added in the team test)
 
   // Check what was actually stored in MongoDB for Team A.
   const saved = await getDb().collection('feedback').findOne({ teamId: new ObjectId(teamA) });

@@ -4,7 +4,7 @@
 
 const express = require('express');
 const { getDb } = require('../db');
-const { requireAdmin, requireJudge } = require('../middleware/auth');
+const { requireAdmin, assertEventAccess, requireJudge } = require('../middleware/auth');
 const { httpError, parseId } = require('../middleware/validate');
 const { validateCriteria, calculateTotal } = require('../services/scoring');
 
@@ -94,6 +94,7 @@ router.put('/scores/:id', requireJudge, async (req, res) => {
 // GET /api/events/:eventId/scores  (admin) -> every score, with team and judge names
 router.get('/events/:eventId/scores', requireAdmin, async (req, res) => {
   const eventId = parseId(req.params.eventId, 'event id');
+  assertEventAccess(req, eventId);
 
   const scores = await getDb()
     .collection('scores')

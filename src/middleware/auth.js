@@ -40,7 +40,24 @@ function requireAdmin(req, res, next) {
   if (payload.role !== 'admin') {
     throw httpError(403, 'Admin access only');
   }
+  // A demo admin token carries demoEventId: it may only touch that one event.
+  // A real admin (logged in with the password) has no demoEventId -> full access.
+  req.demoEventId = payload.demoEventId || null;
   next();
+}
+
+// Called by admin routes once they know which event a request is about.
+function assertEventAccess(req, eventId) {
+  if (req.demoEventId && req.demoEventId !== eventId.toString()) {
+    throw httpError(403, 'The demo admin can only manage the demo event');
+  }
+}
+
+// For actions a demo admin must never do (create or delete whole events).
+function denyDemo(req, action) {
+  if (req.demoEventId) {
+    throw httpError(403, `The demo admin cannot ${action}`);
+  }
 }
 
 // Judges: besides checking the token, make sure the judge still exists
@@ -61,4 +78,35 @@ async function requireJudge(req, res, next) {
   next();
 }
 
-module.exports = { sha256, signToken, requireAdmin, requireJudge };
+// Teams: same idea as judges. A team can only see its own results.
+async function requireTeam(req, res, next) {
+  const payload = readToken(req);
+  if (payload.role !== 'team') {
+    throw httpError(403, 'Team access only');
+  }
+  const team = await getDb()
+    .collection('teams')
+    .findOne({ _id: parseId(payload.teamId, 'team id') });
+  if (!team) {
+    throw httpError(401, 'This team no longer exists');
+  }
+  req.team = team;
+  next();
+}
+
+// Random 8-character access code, e.g. "4F9A1C2B" (used for judges and teams).
+// crypto.randomBytes is cryptographically random, unlike Math.random().
+function generateCode() {
+  return crypto.randomBytes(4).toString('hex').toUpperCase();
+}
+
+module.exports = {
+  sha256,
+  signToken,
+  requireAdmin,
+  assertEventAccess,
+  denyDemo,
+  requireJudge,
+  requireTeam,
+  generateCode,
+};
