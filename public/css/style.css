@@ -808,3 +808,38 @@ body, .card, .stat, .btn-ghost, input, select, textarea { transition: background
 [data-theme="dark"] .badge.closed { color: #f3d48a; }
 [data-theme="dark"] .event-item.active { border-color: var(--border-strong); }
 [data-theme="dark"] #toast.ok { background: #2a4ea8; }
+
+/* =====================================================================
+   NAVBAR v4: a normal full-width bar (no floating pill, no border).
+   Landing page: transparent over the hero photo, solid once scrolled.
+   ===================================================================== */
+.nav {
+  padding: 0; background: var(--surface);
+  border-bottom: 1px solid var(--border); box-shadow: none;
+  transition: background 0.3s, border-color 0.3s, box-shadow 0.3s;
+}
+.nav .nav-inner,
+.nav.scrolled .nav-inner,
+[data-theme="dark"] .nav .nav-inner,
+[data-theme="dark"] .nav.scrolled .nav-inner {
+  height: 76px; padding: 0 40px; border-radius: 0;
+  background: transparent; border: none; box-shadow: none;
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+.landing .nav { background: transparent; border-bottom-color: transparent; }
+.landing .nav.scrolled {
+  background: rgba(255, 255, 255, 0.94); border-bottom-color: var(--border);
+  box-shadow: 0 6px 24px rgba(25, 55, 120, 0.08);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+[data-theme="dark"] .landing .nav.scrolled { background: rgba(11, 17, 32, 0.94); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4); }
+
+/* Bold links. (".nav-links .nav-link" beats the older ".nav-links a" rule.) */
+.nav-links .nav-link { font-weight: 700; color: var(--text); padding: 8px 14px; }
+.nav-links .nav-link:hover { color: var(--accent); background: transparent; }
+.nav-links .nav-link.active { color: var(--accent); background: transparent; }
+.nav-links .nav-link.active .link-hover::before { transform: scale3d(1, 1, 1); }
+
+@media (max-width: 960px) {
+  .nav .nav-inner, .nav.scrolled .nav-inner { height: 64px; padding: 0 20px; }
+}
