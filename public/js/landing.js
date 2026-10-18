@@ -150,3 +150,10 @@ const sectionSpy = new IntersectionObserver(
   { rootMargin: '-45% 0px -50% 0px' } // "on screen" = crossing the middle of the viewport
 );
 ['how', 'roles', 'ai', 'tech'].forEach((id) => $(id) && sectionSpy.observe($(id)));
+
+// ---------- Navbar: a bit more solid once the page is scrolled ----------
+function updateNavShadow() {
+  document.querySelector('.nav').classList.toggle('scrolled', window.scrollY > 40);
+}
+window.addEventListener('scroll', updateNavShadow, { passive: true });
+updateNavShadow();
