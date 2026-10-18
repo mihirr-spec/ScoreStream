@@ -1,82 +1,91 @@
-// One login screen for all three roles. The selected role decides which
+// One sign-in screen for all three roles. The selected role decides which
 // API endpoint we call and which page we open afterwards.
+// "Student" = a member of a team, who signs in with the team's access code.
 
 const ROLES = {
-  admin: {
-    endpoint: '/api/auth/admin-login',
-    field: 'password', // name of the JSON field the server expects
-    label: 'Admin password',
-    inputType: 'password',
-    placeholder: '',
-    next: 'admin.html',
-    image: 'img/admin.jpg',
-    title: 'Run the whole event',
-    text: 'Create events, add teams and judges, and watch every score arrive in real time.',
-    hint: 'Use the admin password set in the server configuration.',
-    demo: 'Demo admin: manage a sample event with 3 teams (your real events stay hidden).',
+  team: {
+    endpoint: '/api/auth/team-login',
+    field: 'code', // name of the JSON field the server expects
+    label: 'Team access code',
+    placeholder: 'e.g. TEAM001',
+    isPassword: false,
+    next: 'team.html',
+    demoLabel: 'Try the demo Student account',
+    forgot: 'Team codes are given out by your event organiser. Ask them for a new one - the admin can reset a code in one click.',
   },
   judge: {
     endpoint: '/api/auth/judge-login',
     field: 'code',
     label: 'Judge access code',
-    inputType: 'text',
     placeholder: 'e.g. JUDGE003',
+    isPassword: false,
     next: 'judge.html',
-    image: 'img/judge.jpg',
-    title: 'Score in seconds',
-    text: 'Tap the stars, leave a comment, and the leaderboard updates for everyone.',
-    hint: 'Your code was given to you by the event organiser. Demo: JUDGE003',
-    demo: 'Demo judge: rate the 3 sample teams with stars and watch the leaderboard move.',
+    demoLabel: 'Try the demo Judge account',
+    forgot: 'Judge codes are given out by your event organiser. Ask them for a new one - the admin can reset a code in one click.',
   },
-  team: {
-    endpoint: '/api/auth/team-login',
-    field: 'code',
-    label: 'Team access code',
-    inputType: 'text',
-    placeholder: 'e.g. TEAM001',
-    next: 'team.html',
-    image: 'img/team.jpg',
-    title: 'See where you stand',
-    text: 'Follow your live rank and read your AI feedback once the event closes.',
-    hint: 'Your team code was given to you by the event organiser. Demo: TEAM001',
-    demo: "Demo team: follow a sample team's live rank, stars and scores.",
+  admin: {
+    endpoint: '/api/auth/admin-login',
+    field: 'password',
+    label: 'Admin password',
+    placeholder: 'Enter your password',
+    isPassword: true,
+    next: 'admin.html',
+    demoLabel: 'Try the demo Administrator account',
+    forgot: 'The admin password is set in the server configuration (ADMIN_PASSWORD in the .env file).',
   },
 };
 
-// Start on the role from the URL (login.html?role=judge), default admin.
+// Start on the role from the URL (login.html?role=judge), default Student.
 const params = new URLSearchParams(location.search);
-let currentRole = params.get('role');
+let currentRole = ROLES[params.get('role')] ? params.get('role') : 'team';
 // Read ?demo=1 now, because selectRole() rewrites the URL.
 const startDemo = params.get('demo') === '1';
-if (!ROLES[currentRole]) currentRole = 'admin';
 
 function selectRole(role) {
   currentRole = role;
   const r = ROLES[role];
 
-  for (const tab of document.querySelectorAll('.role-tab')) {
+  for (const tab of document.querySelectorAll('.login2-tab')) {
     tab.classList.toggle('active', tab.dataset.role === role);
     tab.setAttribute('aria-selected', tab.dataset.role === role);
   }
   $('secret-label').textContent = r.label;
-  $('secret').type = r.inputType;
+  $('secret').type = r.isPassword ? 'password' : 'text';
   $('secret').placeholder = r.placeholder;
   $('secret').value = '';
-  $('login-btn').textContent = `Log in as ${role[0].toUpperCase()}${role.slice(1)}`;
-  $('login-hint').textContent = r.hint;
-  $('demo-btn').textContent = `Try the demo ${role[0].toUpperCase()}${role.slice(1)}`;
-  $('demo-text').textContent = r.demo;
-  $('side-img').src = r.image;
-  $('side-title').textContent = r.title;
-  $('side-text').textContent = r.text;
+  $('icon-key').classList.toggle('hidden', r.isPassword);
+  $('icon-lock').classList.toggle('hidden', !r.isPassword);
+  $('eye-btn').classList.toggle('hidden', !r.isPassword);
+  $('forgot-btn').textContent = r.isPassword ? 'Forgot password?' : 'Forgot your code?';
+  $('forgot-text').classList.add('hidden');
+  $('demo-label').textContent = r.demoLabel;
 
   // Keep the URL in sync so the page can be bookmarked / shared per role.
   history.replaceState(null, '', `login.html?role=${role}`);
   $('secret').focus();
 }
 
-for (const tab of document.querySelectorAll('.role-tab')) {
+for (const tab of document.querySelectorAll('.login2-tab')) {
   tab.addEventListener('click', () => selectRole(tab.dataset.role));
+}
+
+// Eye button: show / hide the admin password.
+$('eye-btn').addEventListener('click', () => {
+  const input = $('secret');
+  input.type = input.type === 'password' ? 'text' : 'password';
+  $('eye-btn').setAttribute('aria-label', input.type === 'password' ? 'Show password' : 'Hide password');
+});
+
+// "Forgot" explains how codes/passwords work (there is no email reset).
+$('forgot-btn').addEventListener('click', () => {
+  $('forgot-text').textContent = ROLES[currentRole].forgot;
+  $('forgot-text').classList.toggle('hidden');
+});
+
+// Saves the token. "Remember me" keeps it after the browser is closed.
+function finishLogin(token) {
+  auth.set(currentRole, token, $('remember').checked);
+  location.href = ROLES[currentRole].next;
 }
 
 $('login-form').addEventListener('submit', (e) => {
@@ -88,8 +97,7 @@ $('login-form').addEventListener('submit', (e) => {
     try {
       // No role passed to api(), because we don't have a token yet.
       const data = await api('POST', r.endpoint, { [r.field]: $('secret').value });
-      auth.set(currentRole, data.token);
-      location.href = r.next;
+      finishLogin(data.token);
     } finally {
       button.disabled = false;
     }
@@ -102,8 +110,7 @@ async function demoLogin() {
   button.disabled = true;
   try {
     const data = await api('POST', '/api/auth/demo-login', { role: currentRole });
-    auth.set(currentRole, data.token);
-    location.href = ROLES[currentRole].next;
+    finishLogin(data.token);
   } finally {
     button.disabled = false;
   }

@@ -29,18 +29,20 @@ function toast(message, type = 'ok') {
 }
 
 // ---------- Login tokens ----------
-// Each role keeps its own token in sessionStorage (cleared when the tab closes).
+// Each role keeps its own token. Normally it goes in sessionStorage (forgotten when
+// the browser closes); with "Remember me" it goes in localStorage (kept until log out).
 const auth = {
   get(role) {
     try {
-      return sessionStorage.getItem(`${role}Token`);
+      return sessionStorage.getItem(`${role}Token`) || localStorage.getItem(`${role}Token`);
     } catch {
       return null;
     }
   },
-  set(role, token) {
+  set(role, token, remember = false) {
     try {
-      sessionStorage.setItem(`${role}Token`, token);
+      this.clear(role);
+      (remember ? localStorage : sessionStorage).setItem(`${role}Token`, token);
     } catch {
       /* storage blocked - the user just has to log in again next time */
     }
@@ -48,6 +50,7 @@ const auth = {
   clear(role) {
     try {
       sessionStorage.removeItem(`${role}Token`);
+      localStorage.removeItem(`${role}Token`);
     } catch {
       /* ignore */
     }

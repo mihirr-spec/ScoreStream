@@ -3,65 +3,75 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Log in - ScoreStream</title>
+  <title>Sign in - ScoreStream</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <header class="nav">
-    <div class="container nav-inner">
-      <a class="logo" href="index.html">
-        <span class="logo-mark">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 20V12M12 20V5M19 20v-9"/></svg>
-        </span>
-        ScoreStream
-      </a>
-      <div class="nav-actions">
-        <a class="btn btn-ghost btn-sm" href="leaderboard.html">Live leaderboard</a>
+  <main class="login2">
+    <!-- Campus photos on both sides (decorative) -->
+    <div class="login2-side left"><img src="img/login-left.jpg" alt=""></div>
+    <div class="login2-side right"><img src="img/login-right.jpg" alt=""></div>
+
+    <a class="logo login2-logo" href="index.html">
+      <span class="logo-mark">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="logo-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3b74e6"/><stop offset="1" stop-color="#1f4fbf"/></linearGradient></defs><path d="M23.5 8.5c-1.8-1.9-4.6-3-7.6-3-4.3 0-7.4 2.3-7.4 5.5 0 6.6 15 4.7 15 10.6 0 3.2-3.2 5.4-7.5 5.4-3.1 0-6-1.2-8-3.3" fill="none" stroke="url(#logo-grad)" stroke-width="4.6" stroke-linecap="round"/></svg>
+      </span>
+      ScoreStream
+    </a>
+
+    <div class="login2-card">
+      <h1>Welcome <span>back</span></h1>
+      <p class="sub">Sign in to manage your events, scores and teams.</p>
+
+      <!-- Role tabs. "Student" logs in with their team's code. -->
+      <div class="login2-tabs" role="tablist">
+        <button class="login2-tab" data-role="team" type="button" role="tab">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3 1 9l11 6 9-4.9V17h2V9L12 3zm-6.8 9.7V16c0 2.2 3 4 6.8 4s6.8-1.8 6.8-4v-3.3L12 16.4l-6.8-3.7z"/></svg>
+          <span>Student</span>
+        </button>
+        <button class="login2-tab" data-role="judge" type="button" role="tab">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.4 3.3-5.5 6.5-5.5s5.9 2.1 6.5 5.5"/><path d="M15.5 4.8a3.3 3.3 0 0 1 0 6.4M18 14.8c2 .8 3.2 2.6 3.5 5.2"/></svg>
+          <span>Judge</span>
+        </button>
+        <button class="login2-tab" data-role="admin" type="button" role="tab">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+          <span>Administrator</span>
+        </button>
       </div>
-    </div>
-  </header>
 
-  <div class="login-wrap">
-    <!-- Left: photo + message that change with the selected role -->
-    <aside class="login-side">
-      <img id="side-img" src="img/admin.jpg" alt="">
-      <div class="login-quote">
-        <h2 id="side-title">Run the whole event</h2>
-        <p id="side-text">Create events, add teams and judges, and watch every score arrive in real time.</p>
-      </div>
-    </aside>
-
-    <!-- Right: the login card -->
-    <main class="login-main">
-      <div class="login-card">
-        <h1>Welcome back</h1>
-        <p class="muted">Choose how you are taking part, then log in.</p>
-
-        <div class="role-tabs" role="tablist">
-          <button class="role-tab" data-role="admin" type="button" role="tab">Admin</button>
-          <button class="role-tab" data-role="judge" type="button" role="tab">Judge</button>
-          <button class="role-tab" data-role="team" type="button" role="tab">Team</button>
+      <form class="login2-form" id="login-form">
+        <label class="lbl" for="secret" id="secret-label">Team access code</label>
+        <div class="input-icon">
+          <!-- key icon (codes) / lock icon (password) - swapped by login.js -->
+          <svg id="icon-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 9.2-9.2M17 6l3 3M14.5 8.5l2 2"/></svg>
+          <svg id="icon-lock" class="hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+          <input id="secret" required autocomplete="off">
+          <button class="eye-btn hidden" id="eye-btn" type="button" aria-label="Show password">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
         </div>
 
-        <form id="login-form">
-          <div class="field">
-            <label for="secret" id="secret-label">Admin password</label>
-            <input id="secret" type="password" required autocomplete="off">
-          </div>
-          <button class="btn btn-primary btn-block btn-lg" id="login-btn" type="submit">Log in</button>
-        </form>
+        <div class="login2-row">
+          <label><input type="checkbox" id="remember"> Remember me</label>
+          <button class="link-btn" id="forgot-btn" type="button">Forgot your code?</button>
+        </div>
+        <p class="forgot-text hidden" id="forgot-text"></p>
 
-        <div class="login-hint" id="login-hint"></div>
+        <button class="btn btn-primary signin-btn" id="login-btn" type="submit">Sign In <span aria-hidden="true">→</span></button>
+      </form>
 
-        <div class="divider">or explore without an account</div>
-        <button class="btn btn-ghost btn-block btn-lg demo-btn" id="demo-btn" type="button">Try the demo</button>
-        <p class="muted small" id="demo-text" style="margin:10px 0 0;text-align:center"></p>
-      </div>
-    </main>
-  </div>
+      <div class="login2-or">OR</div>
+
+      <button class="demo-wide" id="demo-btn" type="button">
+        <span aria-hidden="true">⭐</span> <span id="demo-label">Try the demo Student account</span>
+      </button>
+
+      <p class="login2-foot">New to ScoreStream? <a href="index.html#roles">See how it works</a></p>
+    </div>
+  </main>
 
   <script src="js/common.js"></script>
   <script src="js/login.js"></script>
