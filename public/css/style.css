@@ -302,13 +302,6 @@ th { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; colo
 .meter span { position: absolute; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; background: #fff; border: 3px solid var(--text); }
 .meter-labels { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--muted); }
 
-/* "Under the hood" MongoDB feature tiles */
-.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
-.tile { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s; }
-.tile:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); border-color: var(--accent); }
-.tile code { display: inline-block; font-family: Consolas, monospace; font-size: 0.82rem; background: var(--accent-soft); color: var(--accent-dark); padding: 3px 9px; border-radius: 6px; margin-bottom: 12px; }
-.tile h3 { font-size: 1.1rem; }
-.tile p { color: var(--muted); font-size: 0.94rem; margin: 0; }
 
 /* Final call to action with the winners photo */
 .cta { position: relative; border-radius: 26px; overflow: hidden; min-height: 380px; display: flex; align-items: center; }
@@ -404,7 +397,6 @@ input[type="range"] { padding: 0; border: none; height: 6px; accent-color: var(-
   .hero-grid, .role, .ai-grid, .admin-grid, .team-hero, .feedback-cols { grid-template-columns: 1fr; }
   .role.flip .role-media { order: 0; }
   .steps { grid-template-columns: repeat(2, 1fr); }
-  .tiles { grid-template-columns: repeat(2, 1fr); }
   .stats { grid-template-columns: repeat(2, 1fr); }
   .nav-links { display: none; }
   .board-widget { left: 12px; bottom: -30px; }
@@ -412,7 +404,7 @@ input[type="range"] { padding: 0; border: none; height: 6px; accent-color: var(-
   .hero { padding-bottom: 110px; }
 }
 @media (max-width: 600px) {
-  .steps, .tiles, .podium { grid-template-columns: 1fr; }
+  .steps, .podium { grid-template-columns: 1fr; }
   .section { padding: 70px 0; }
   .cta-inner { padding: 30px 22px; }
   .rubric-row { grid-template-columns: 1fr 1fr; }
@@ -453,7 +445,7 @@ input[type="range"] { padding: 0; border: none; height: 6px; accent-color: var(-
 .hero.hero-bg {
   background:
     linear-gradient(90deg, #ffffff 0%, rgba(255, 255, 255, 0.92) 30%, rgba(255, 255, 255, 0.35) 55%, rgba(255, 255, 255, 0) 70%),
-    url("../img/hero-rankings.jpg") right center / cover no-repeat;
+    url("../img/hero-rankings.webp") right center / cover no-repeat;
   padding: 120px 0 140px;
   min-height: 640px;
 }
@@ -470,7 +462,7 @@ input[type="range"] { padding: 0; border: none; height: 6px; accent-color: var(-
   .hero.hero-bg {
     background:
       linear-gradient(180deg, rgba(255, 255, 255, 0.96) 45%, rgba(255, 255, 255, 0.55)),
-      url("../img/hero-rankings.jpg") 75% center / cover no-repeat;
+      url("../img/hero-rankings.webp") 75% center / cover no-repeat;
     padding: 80px 0 90px;
     min-height: 0;
   }
@@ -478,8 +470,6 @@ input[type="range"] { padding: 0; border: none; height: 6px; accent-color: var(-
 }
 
 /* ---------- Brand: blue "S" ribbon logo + serif display headings ---------- */
-.logo-mark { width: 32px; height: 32px; background: none; border-radius: 0; }
-.logo-mark svg { width: 32px; height: 32px; }
 .hero h1, .section-head h2, .cta h2, .login2-card h1 { font-family: var(--font-display); font-weight: 700; letter-spacing: -0.01em; }
 .btn-primary { background: linear-gradient(135deg, #1f4fbf, #3b74e6); }
 .btn-primary:hover { background: linear-gradient(135deg, #1a43a6, #2f66d8); }
@@ -556,4 +546,118 @@ input[type="range"] { padding: 0; border: none; height: 6px; accent-color: var(-
   .login2-card { padding: 28px 20px 24px; }
   .login2-card h1 { font-size: 2.1rem; }
   .login2-tab span { font-size: 0.8rem; }
+}
+
+/* =====================================================================
+   NAVBAR (design: full-width bar, bold links with a sliding underline,
+   active pill, round search button, outline + solid pill buttons)
+   ===================================================================== */
+.container-wide { max-width: 1400px; margin: 0 auto; padding: 0 40px; }
+.nav {
+  background: rgba(255, 255, 255, 0.9);
+  border-bottom: 1px solid #e6edf7;
+  box-shadow: 0 10px 30px rgba(43, 95, 217, 0.06);
+  overflow: visible;
+}
+/* soft blue curves at both ends of the bar */
+.nav::before, .nav::after {
+  content: ""; position: absolute; top: 0; bottom: 0; width: 140px; pointer-events: none;
+}
+.nav::before { left: 0; background: radial-gradient(120% 140% at 0% 0%, rgba(59, 116, 230, 0.22), rgba(59, 116, 230, 0) 60%); }
+.nav::after { right: 0; background: radial-gradient(120% 140% at 100% 100%, rgba(59, 116, 230, 0.22), rgba(59, 116, 230, 0) 60%); }
+.nav-inner { height: 76px; position: relative; z-index: 1; }
+.logo { font-size: 1.35rem; gap: 12px; letter-spacing: -0.01em; }
+.logo-img { width: 34px; height: 34px; object-fit: contain; }
+
+.nav-links { gap: 6px; }
+.nav-link {
+  color: #1c2a35; text-decoration: none; font-weight: 600; font-size: 0.98rem;
+  padding: 9px 18px; border-radius: 999px; transition: background 0.2s, color 0.2s;
+}
+.nav-link:hover { color: var(--accent-dark); }
+.nav-link.active { background: #e9f0ff; color: var(--accent); }
+
+/* Line hover link (ported from VengeanceUI "line-hover-link", slide variant):
+   a 1px line under the text grows from the left on hover and leaves to the right. */
+.link-hover { position: relative; display: inline-flex; white-space: nowrap; }
+.link-hover::before {
+  content: ""; position: absolute; left: 0; top: 100%; width: 100%; height: 1.5px;
+  background: currentColor; pointer-events: none;
+  transform: scale3d(0, 1, 1); transform-origin: 100% 50%; transition: transform 0.3s ease;
+}
+.nav-link:hover .link-hover::before, .nav-link:focus-visible .link-hover::before { transform: scale3d(1, 1, 1); transform-origin: 0% 50%; }
+.nav-link.active .link-hover::before { transform: scale3d(0, 1, 1); }
+
+.icon-btn {
+  width: 44px; height: 44px; border-radius: 50%; border: none; cursor: pointer;
+  background: #eef3fc; color: #1c2a35; display: grid; place-items: center; transition: background 0.2s;
+}
+.icon-btn:hover { background: #e1eafb; }
+.icon-btn svg { width: 20px; height: 20px; }
+.nav-actions { gap: 12px; }
+.nav-actions .btn-sm { padding: 10px 22px; font-size: 0.95rem; }
+.nav-actions .btn-ghost { border-color: #d5deea; box-shadow: 0 2px 8px rgba(28, 42, 53, 0.06); }
+.nav-actions .btn-primary { background: linear-gradient(135deg, #1d5cf0, #2f73ff); box-shadow: 0 8px 20px rgba(29, 92, 240, 0.3); }
+
+/* Search popover (lists public events) */
+.search-wrap { position: relative; }
+.search-pop {
+  position: absolute; right: 0; top: 54px; width: 320px; z-index: 60;
+  background: #fff; border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-lg); padding: 10px;
+}
+.search-pop input { margin-bottom: 6px; }
+.search-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 9px 10px; border-radius: 9px; text-decoration: none; color: var(--text); font-weight: 500; font-size: 0.92rem; }
+.search-item:hover { background: var(--bg-soft); }
+.search-empty { padding: 10px; color: var(--muted); font-size: 0.9rem; }
+
+/* ---------- Hero: higher and further left ---------- */
+.hero.hero-bg { padding: 56px 0 110px; min-height: 600px; }
+.hero-copy { max-width: 600px; }
+
+/* ---------- Call to action: content sits lower in the box ---------- */
+.cta { min-height: 460px; align-items: flex-end; }
+.cta-inner { padding: 56px 56px 64px; }
+.section:has(.cta) { padding-bottom: 40px; }
+.footer { margin-top: 30px; }
+
+/* =====================================================================
+   HIGHLIGHT GRID (ported from VengeanceUI "highlight-grid"): a coloured
+   highlight glides behind the hovered cell, morphing position, size and colour.
+   ===================================================================== */
+.hgrid-wrap { overflow-x: auto; padding-bottom: 6px; }
+.hgrid {
+  position: relative; display: flex; flex-direction: column;
+  min-width: 760px; max-width: 1040px; height: 300px; margin: 0 auto;
+  border: 1px solid #cfdaea; border-radius: 4px; background: #fff;
+}
+.hgrid-highlight {
+  position: absolute; left: 0; top: 0; z-index: 0; opacity: 0; pointer-events: none;
+  background-image: radial-gradient(120% 120% at 50% 0%, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0) 52%),
+                    linear-gradient(180deg, rgba(255, 255, 255, 0) 55%, rgba(0, 0, 0, 0.18));
+  transition: transform 250ms ease, width 250ms ease, height 250ms ease, background-color 250ms ease, opacity 250ms ease;
+}
+.hgrid-row { display: flex; flex: 1; }
+.hgrid-row + .hgrid-row { border-top: 1px solid #cfdaea; }
+.hgrid-cell {
+  flex: 1; display: flex; align-items: center; justify-content: center; padding: 8px;
+  border: none; background: transparent; cursor: pointer; font: inherit;
+}
+.hgrid-cell + .hgrid-cell { border-left: 1px solid #cfdaea; }
+.hgrid-cell span {
+  position: relative; z-index: 2; white-space: nowrap; user-select: none;
+  font-family: Consolas, "SF Mono", monospace; font-size: 13px; font-weight: 600; text-transform: uppercase;
+  color: #4b5b6a; transition: color 0.2s;
+}
+.hgrid-cell.active span { color: #fff; }
+.hgrid-detail { max-width: 720px; margin: 30px auto 0; text-align: center; min-height: 96px; }
+.hgrid-detail h3 { font-size: 1.3rem; margin-bottom: 8px; }
+.hgrid-detail p { color: var(--muted); margin: 0; }
+
+@media (max-width: 960px) {
+  .container-wide { padding: 0 20px; }
+  .nav::before, .nav::after { width: 60px; }
+}
+@media (max-width: 600px) {
+  .nav-actions .btn-sm { padding: 8px 14px; }
+  .search-pop { right: -90px; width: 290px; }
 }

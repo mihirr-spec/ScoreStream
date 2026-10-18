@@ -8,35 +8,41 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" type="image/png" href="img/favicon.png">
+  <link rel="stylesheet" href="css/style.css?v=5">
 </head>
 <body>
 
   <!-- ===== Top bar ===== -->
   <header class="nav">
-    <div class="container nav-inner">
+    <div class="container-wide nav-inner">
       <a class="logo" href="index.html">
-        <span class="logo-mark">
-          <svg viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="logo-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3b74e6"/><stop offset="1" stop-color="#1f4fbf"/></linearGradient></defs><path d="M23.5 8.5c-1.8-1.9-4.6-3-7.6-3-4.3 0-7.4 2.3-7.4 5.5 0 6.6 15 4.7 15 10.6 0 3.2-3.2 5.4-7.5 5.4-3.1 0-6-1.2-8-3.3" fill="none" stroke="url(#logo-grad)" stroke-width="4.6" stroke-linecap="round"/></svg>
-        </span>
+        <img class="logo-img" src="img/logo.webp" alt="" width="34" height="34">
         ScoreStream
       </a>
-      <nav class="nav-links">
-        <a href="#how">How it works</a>
-        <a href="#roles">Who it's for</a>
-        <a href="#ai">AI feedback</a>
-        <a href="#tech">Under the hood</a>
+      <nav class="nav-links" id="nav-links">
+        <a class="nav-link" href="#how"><span class="link-hover link-hover--slide">How it works</span></a>
+        <a class="nav-link" href="#roles"><span class="link-hover link-hover--slide">Who it's for</span></a>
+        <a class="nav-link" href="#ai"><span class="link-hover link-hover--slide">AI feedback</span></a>
+        <a class="nav-link" href="#tech"><span class="link-hover link-hover--slide">Under the hood</span></a>
       </nav>
       <div class="nav-actions">
+        <div class="search-wrap">
+          <button class="icon-btn" id="search-btn" type="button" aria-label="Search events" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button>
+          <div class="search-pop hidden" id="search-pop">
+            <input id="search-input" type="search" placeholder="Search events..." autocomplete="off" aria-label="Search events">
+            <div id="search-results"></div>
+          </div>
+        </div>
         <a class="btn btn-ghost btn-sm hide-sm" href="leaderboard.html">Live leaderboard</a>
-        <a class="btn btn-primary btn-sm" href="login.html">Log in</a>
+        <a class="btn btn-primary btn-sm" href="login.html">Log in <span aria-hidden="true">&rarr;</span></a>
       </div>
     </div>
   </header>
 
   <!-- ===== Hero (full-width chalkboard "Rankings" photo) ===== -->
   <section class="hero hero-bg">
-    <div class="container">
+    <div class="container-wide">
       <div class="hero-copy reveal">
         <span class="eyebrow"><span class="pulse"></span> Real-time judging, powered by MongoDB</span>
         <h1>Judge live.<br>Rank <span class="hl">instantly.</span><br>Feedback writes itself.</h1>
@@ -125,7 +131,7 @@
       </div>
 
       <div class="role reveal">
-        <div class="role-media"><img src="img/admin.jpg" alt="Teams working at a hackathon"></div>
+        <div class="role-media"><img src="img/admin.webp" alt="Teams working at a hackathon"></div>
         <div>
           <span class="role-tag">Admin</span>
           <h3>Run the whole event from one dashboard</h3>
@@ -144,7 +150,7 @@
       </div>
 
       <div class="role flip reveal">
-        <div class="role-media"><img src="img/judge.jpg" alt="A team pitching their idea to judges"></div>
+        <div class="role-media"><img src="img/judge.webp" alt="A team pitching their idea to judges"></div>
         <div>
           <span class="role-tag">Judge</span>
           <h3>Score in seconds, from any device</h3>
@@ -163,7 +169,7 @@
       </div>
 
       <div class="role reveal">
-        <div class="role-media"><img src="img/team.jpg" alt="Students preparing their project together"></div>
+        <div class="role-media"><img src="img/team.webp" alt="Students preparing their project together"></div>
         <div>
           <span class="role-tag">Team</span>
           <h3>Know where you stand, then learn how to improve</h3>
@@ -199,9 +205,9 @@
         </ul>
       </div>
       <div class="ai-photo reveal">
-        <img src="img/ai.jpg" alt="Laptop showing code on screen">
+        <img src="img/ai.webp" alt="Laptop showing code on screen">
         <div class="ai-card">
-          <h4>Green Route <span class="badge positive">positive</span></h4>
+          <h4>Team Nova <span class="badge positive">positive</span></h4>
           <p>The team showed excellent real-world impact with a clear, confident pitch and a strong data story.</p>
           <div class="meter"><span style="left:92%"></span></div>
           <div class="meter-labels"><span>Negative</span><span>Neutral</span><span>Positive</span></div>
@@ -218,13 +224,27 @@
         <h2>MongoDB does the heavy lifting</h2>
         <p>The rules, the maths and the live updates all live in the database itself.</p>
       </div>
-      <div class="tiles">
-        <div class="tile reveal"><code>$jsonSchema</code><h3>Validated documents</h3><p>Every collection has a schema validator, so the database rejects badly shaped data.</p></div>
-        <div class="tile reveal"><code>unique index</code><h3>One score per judge</h3><p>A unique index on event, team and judge makes double scoring impossible.</p></div>
-        <div class="tile reveal"><code>$setWindowFields</code><h3>Ranking in the database</h3><p>An aggregation pipeline averages scores, joins team names, ranks teams and saves the result with $merge.</p></div>
-        <div class="tile reveal"><code>watch()</code><h3>Change Streams</h3><p>MongoDB pushes every new score to the server the moment it is written. No polling.</p></div>
-        <div class="tile reveal"><code>text/event-stream</code><h3>Live in every browser</h3><p>Server-Sent Events carry each new ranking to every open screen instantly.</p></div>
-        <div class="tile reveal"><code>explain()</code><h3>Proven fast</h3><p>Indexes turn full collection scans into index scans that read only what is needed.</p></div>
+      <div class="hgrid-wrap reveal">
+        <div class="hgrid" id="hgrid">
+          <div class="hgrid-highlight" id="hgrid-highlight" aria-hidden="true"></div>
+        <div class="hgrid-row">
+          <button class="hgrid-cell" type="button" data-title="Validated documents" data-text="Every collection has a $jsonSchema validator, so MongoDB itself rejects documents with the wrong shape - even if the app has a bug."><span>( $jsonSchema )</span></button>
+          <button class="hgrid-cell" type="button" data-title="One score per judge" data-text="A unique compound index on { eventId, teamId, judgeId } makes it impossible for a judge to score the same team twice. The database returns error 11000."><span>( unique index )</span></button>
+          <button class="hgrid-cell" type="button" data-title="Ranking inside MongoDB" data-text="The leaderboard pipeline averages scores with $group, joins team names with $lookup and ranks teams with $setWindowFields + $rank."><span>( $setWindowFields )</span></button>
+          <button class="hgrid-cell" type="button" data-title="Saved leaderboard" data-text="$merge writes the ranked rows into the leaderboard collection, so reading the board is a single indexed query."><span>( $merge )</span></button>
+        </div>
+        <div class="hgrid-row">
+          <button class="hgrid-cell" type="button" data-title="Pushed, not polled" data-text="scores.watch() makes MongoDB push every insert, update and delete to the server the moment it happens."><span>( change streams )</span></button>
+          <button class="hgrid-cell" type="button" data-title="Live in every browser" data-text="Each new ranking travels over Server-Sent Events to every open leaderboard, team page and the landing page."><span>( server-sent events )</span></button>
+          <button class="hgrid-cell" type="button" data-title="Proven fast" data-text="explain("executionStats") shows the indexes turning a full collection scan (COLLSCAN) into an index scan (IXSCAN)."><span>( explain() )</span></button>
+          <button class="hgrid-cell" type="button" data-title="Marks per criterion" data-text="The team page turns each free-form criteria object into key/value pairs, then averages every criterion with $group."><span>( $objectToArray )</span></button>
+          <button class="hgrid-cell" type="button" data-title="One demo event" data-text="A partial unique index on { demo: true } guarantees there is only ever one shared demo event."><span>( partial index )</span></button>
+        </div>
+        </div>
+      </div>
+      <div class="hgrid-detail reveal" aria-live="polite">
+        <h3 id="hgrid-title"></h3>
+        <p id="hgrid-text"></p>
       </div>
     </div>
   </section>
@@ -233,7 +253,7 @@
   <section class="section">
     <div class="container">
       <div class="cta reveal">
-        <img src="img/winners.jpg" alt="A winning team celebrating with a prize cheque">
+        <img src="img/winners.webp" alt="A winning team celebrating with a prize cheque">
         <div class="cta-inner">
           <h2>Ready for your next event?</h2>
           <p>Set it up in minutes. Judges, teams and the audience all get what they need in real time.</p>
@@ -258,7 +278,7 @@
     </div>
   </footer>
 
-  <script src="js/common.js"></script>
-  <script src="js/landing.js"></script>
+  <script src="js/common.js?v=5"></script>
+  <script src="js/landing.js?v=5"></script>
 </body>
 </html>

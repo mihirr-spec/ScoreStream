@@ -142,3 +142,53 @@ function stars(value) {
 function starsFromScore(scoreOutOf10) {
   return stars(Math.round(scoreOutOf10) / 2);
 }
+
+// ---------- Navbar search (public pages) ----------
+// The round search button opens a small box that filters the public events
+// (GET /api/leaderboard/events) and links to each event's leaderboard.
+function setupSearch() {
+  const btn = $('search-btn');
+  if (!btn) return;
+  const pop = $('search-pop');
+  const input = $('search-input');
+  let events = null; // loaded once, the first time the box opens
+
+  function render() {
+    const query = input.value.trim().toLowerCase();
+    const matches = (events || []).filter((e) => e.name.toLowerCase().includes(query));
+    const box = $('search-results');
+    box.replaceChildren();
+    if (matches.length === 0) box.append(el('div', events ? 'No matching events' : 'Loading...', 'search-empty'));
+    for (const event of matches.slice(0, 8)) {
+      const link = el('a', null, 'search-item');
+      link.href = `leaderboard.html?event=${event._id}`;
+      link.append(el('span', event.name), badge(event.status));
+      box.append(link);
+    }
+  }
+
+  function close() {
+    pop.classList.add('hidden');
+    btn.setAttribute('aria-expanded', 'false');
+  }
+
+  btn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const opening = pop.classList.contains('hidden');
+    if (!opening) return close();
+    pop.classList.remove('hidden');
+    btn.setAttribute('aria-expanded', 'true');
+    input.value = '';
+    input.focus();
+    render();
+    if (!events) {
+      events = await api('GET', '/api/leaderboard/events').catch(() => []);
+      render();
+    }
+  });
+  input.addEventListener('input', render);
+  pop.addEventListener('click', (e) => e.stopPropagation());
+  document.addEventListener('click', close);
+  document.addEventListener('keydown', (e) => e.key === 'Escape' && close());
+}
+setupSearch();

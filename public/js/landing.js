@@ -95,3 +95,58 @@ startLiveWidget()
     if (!isLive) startDemoWidget();
   })
   .catch(startDemoWidget);
+
+// ---------- Highlight grid (ported from VengeanceUI "highlight-grid") ----------
+// One coloured highlight glides behind the hovered cell, changing position,
+// size and colour with a CSS transition. The text below explains that feature.
+const GRID_COLORS = ['#1d5cf0', '#2b5fd9', '#1e47b0', '#3b74e6', '#14389c', '#2f73ff', '#3566d6', '#1f4fbf', '#4f8df5'];
+
+function setupHighlightGrid() {
+  const grid = $('hgrid');
+  if (!grid) return;
+  const highlight = $('hgrid-highlight');
+  const cells = [...grid.querySelectorAll('.hgrid-cell')];
+  let active = 0;
+
+  function moveTo(index, animate = true) {
+    const cell = cells[index];
+    const rect = cell.getBoundingClientRect();
+    const gridRect = grid.getBoundingClientRect();
+    if (rect.width === 0) return;
+    highlight.style.transitionDuration = animate ? '' : '0s';
+    highlight.style.opacity = '1';
+    highlight.style.transform = `translate(${rect.left - gridRect.left - 1}px, ${rect.top - gridRect.top - 1}px)`;
+    highlight.style.width = `${rect.width}px`;
+    highlight.style.height = `${rect.height}px`;
+    highlight.style.backgroundColor = GRID_COLORS[index % GRID_COLORS.length];
+
+    cells.forEach((c, i) => c.classList.toggle('active', i === index));
+    $('hgrid-title').textContent = cell.dataset.title;
+    $('hgrid-text').textContent = cell.dataset.text;
+    active = index;
+  }
+
+  cells.forEach((cell, i) => {
+    cell.addEventListener('mouseenter', () => moveTo(i));
+    cell.addEventListener('focus', () => moveTo(i)); // keyboard users too
+    cell.addEventListener('click', () => moveTo(i)); // and touch screens
+  });
+
+  // Park on the first cell, and keep the highlight aligned when the layout changes.
+  requestAnimationFrame(() => moveTo(0, false));
+  new ResizeObserver(() => moveTo(active, false)).observe(grid);
+}
+setupHighlightGrid();
+
+// ---------- Navbar: highlight the section currently on screen ----------
+const navLinks = [...document.querySelectorAll('.nav-link')];
+const sectionSpy = new IntersectionObserver(
+  (entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      navLinks.forEach((a) => a.classList.toggle('active', a.getAttribute('href') === `#${entry.target.id}`));
+    }
+  },
+  { rootMargin: '-45% 0px -50% 0px' } // "on screen" = crossing the middle of the viewport
+);
+['how', 'roles', 'ai', 'tech'].forEach((id) => $(id) && sectionSpy.observe($(id)));
