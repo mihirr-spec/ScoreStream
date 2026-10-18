@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Leaderboard - Live Judging</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header>
+    <h1>Live Leaderboard</h1>
+    <nav>
+      <a href="admin.html">Admin</a>
+      <a href="judge.html">Judge</a>
+      <a href="leaderboard.html">Leaderboard</a>
+    </nav>
+  </header>
+
+  <main>
+    <div id="message" class="message hidden"></div>
+
+    <!-- Shown when no ?event= is in the URL -->
+    <section id="event-picker" class="card hidden">
+      <h2>Choose an event</h2>
+      <div id="event-list"></div>
+    </section>
+
+    <section id="board" class="card hidden">
+      <div class="row">
+        <div>
+          <h2 id="event-name" style="margin:0"></h2>
+          <span id="event-status" class="pill"></span>
+        </div>
+        <span id="connection" class="connection off shrink">Connecting...</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Rank</th><th>Team</th><th>Average (out of 10)</th><th>Judges</th></tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <p id="empty" class="muted hidden">No scores yet - the table fills in as judges submit.</p>
+      <p id="updated" class="muted"></p>
+    </section>
+
+    <section id="feedback-section" class="hidden">
+      <h2>Team feedback</h2>
+      <div id="feedback-list"></div>
+    </section>
+  </main>
+
+  <script src="js/leaderboard.js"></script>
+</body>
+</html>

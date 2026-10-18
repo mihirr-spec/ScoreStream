@@ -1,0 +1,151 @@
+/* Shared styles for all three pages. Plain CSS, no framework. */
+
+:root {
+  --bg: #f4f5f8;
+  --card: #ffffff;
+  --text: #1d2330;
+  --muted: #6b7280;
+  --border: #dde1e8;
+  --primary: #2f5bea;
+  --primary-dark: #2448c0;
+  --danger: #d23b3b;
+  --success: #1f9d55;
+  --warning: #c98a00;
+  --radius: 10px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.45;
+}
+
+header {
+  background: #1d2330;
+  color: #fff;
+  padding: 12px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+header h1 { font-size: 1.1rem; margin: 0; }
+header nav a { color: #c9d3ff; margin-left: 14px; text-decoration: none; }
+header nav a:hover { text-decoration: underline; }
+
+main { max-width: 1000px; margin: 0 auto; padding: 20px 16px 60px; }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  margin-bottom: 18px;
+}
+.card h2 { margin: 0 0 12px; font-size: 1.15rem; }
+.card h3 { margin: 18px 0 8px; font-size: 1rem; }
+
+.hidden { display: none !important; }
+.muted { color: var(--muted); font-size: 0.9rem; }
+
+label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 4px; }
+input, select, textarea {
+  font: inherit;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  width: 100%;
+  background: #fff;
+  color: var(--text);
+}
+textarea { min-height: 60px; resize: vertical; }
+
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 10px; }
+.row > * { flex: 1 1 140px; }
+.row > .shrink { flex: 0 0 auto; }
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 14px;
+  background: var(--primary);
+  color: #fff;
+}
+button:hover { background: var(--primary-dark); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+button.secondary { background: #e7eaf1; color: var(--text); }
+button.secondary:hover { background: #d8dce6; }
+button.danger { background: var(--danger); }
+button.small { padding: 4px 10px; font-size: 0.85rem; }
+
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+th { font-size: 0.8rem; text-transform: uppercase; color: var(--muted); }
+.table-wrap { overflow-x: auto; }
+
+.message { padding: 10px 14px; border-radius: 6px; margin-bottom: 14px; }
+.message.error { background: #fde8e8; color: #8a1f1f; }
+.message.ok { background: #e3f6ec; color: #145c34; }
+
+.pill {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.pill.draft { background: #eceff4; color: #4b5563; }
+.pill.live { background: #e3f6ec; color: var(--success); }
+.pill.closed { background: #fdf1d6; color: var(--warning); }
+.pill.mock { background: #fde8e8; color: var(--danger); }
+/* Sentiment badges on AI feedback cards */
+.pill.positive { background: #e3f6ec; color: var(--success); }
+.pill.neutral { background: #eceff4; color: #4b5563; }
+.pill.negative { background: #fde8e8; color: var(--danger); }
+
+.list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.list-item:last-child { border-bottom: none; }
+
+.code-box {
+  font-family: Consolas, monospace;
+  font-size: 1.3rem;
+  background: #fff8e1;
+  border: 1px dashed var(--warning);
+  padding: 10px 14px;
+  border-radius: 6px;
+  margin: 10px 0;
+}
+
+/* Leaderboard */
+.rank { font-weight: 700; font-size: 1.1rem; width: 60px; }
+.score-big { font-weight: 700; font-size: 1.1rem; }
+.top1 td { background: #fff8e1; }
+.connection { font-size: 0.85rem; }
+.connection.on { color: var(--success); }
+.connection.off { color: var(--danger); }
+
+/* A row flashes briefly when its score changes (added by leaderboard.js). */
+@keyframes flash { from { background: #d7e3ff; } to { background: transparent; } }
+tr.changed td { animation: flash 1.5s ease-out; }
+
+.feedback-card { border-left: 4px solid var(--primary); }
+.feedback-card ul { margin: 6px 0; padding-left: 20px; }
+
+/* Judge scoring cards */
+.criteria-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 10px; }
+.total-preview { font-weight: 700; }

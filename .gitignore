@@ -1,0 +1,11 @@
+# Installed packages - recreated with "npm install", never committed
+node_modules/
+
+# Real secrets live here - NEVER commit it (only .env.example is tracked)
+.env
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+npm-debug.log*

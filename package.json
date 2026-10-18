@@ -1,0 +1,29 @@
+{
+  "name": "scorestream",
+  "version": "1.0.0",
+  "description": "Real-time event judging and leaderboard system built on MongoDB (Change Streams, aggregation pipelines, SSE) with AI-generated team feedback",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mihirr-spec/ScoreStream.git"
+  },
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "setup-db": "node scripts/setup-db.js",
+    "seed": "node scripts/seed.js",
+    "explain": "node scripts/explain.js",
+    "test": "node --test tests/api.test.js"
+  },
+  "dependencies": {
+    "dotenv": "^18.0.8",
+    "express": "^5.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "mongodb": "^7.7.0"
+  }
+}

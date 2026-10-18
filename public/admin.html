@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin - Live Judging</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header>
+    <h1>Live Judging - Admin</h1>
+    <nav>
+      <a href="admin.html">Admin</a>
+      <a href="judge.html">Judge</a>
+      <a href="leaderboard.html">Leaderboard</a>
+    </nav>
+  </header>
+
+  <main>
+    <div id="message" class="message hidden"></div>
+
+    <!-- Step 1: log in -->
+    <section id="login-section" class="card">
+      <h2>Admin login</h2>
+      <form id="login-form" class="row">
+        <div>
+          <label for="password">Admin password</label>
+          <input id="password" type="password" required>
+        </div>
+        <button class="shrink" type="submit">Log in</button>
+      </form>
+    </section>
+
+    <!-- Step 2: manage events (shown after login) -->
+    <div id="app-section" class="hidden">
+      <section class="card">
+        <div class="row">
+          <h2 style="margin:0">Events</h2>
+          <button id="logout-btn" class="secondary shrink" type="button">Log out</button>
+        </div>
+        <div id="event-list"></div>
+      </section>
+
+      <section class="card">
+        <h2>Create event</h2>
+        <form id="event-form">
+          <div class="row">
+            <div>
+              <label for="event-name">Event name</label>
+              <input id="event-name" required maxlength="100">
+            </div>
+            <div class="shrink">
+              <label for="event-status">Status</label>
+              <select id="event-status">
+                <option value="draft">draft</option>
+                <option value="live">live</option>
+              </select>
+            </div>
+          </div>
+          <label>Rubric (weights must add up to 1)</label>
+          <div id="rubric-rows"></div>
+          <div class="row">
+            <button id="add-rubric-row" class="secondary shrink" type="button">+ Add criterion</button>
+            <span id="weight-sum" class="muted"></span>
+            <button class="shrink" type="submit">Create event</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Step 3: one selected event -->
+      <section id="event-detail" class="card hidden">
+        <div class="row">
+          <div>
+            <h2 id="detail-name" style="margin:0"></h2>
+            <span id="detail-status" class="pill"></span>
+            <span id="detail-rubric" class="muted"></span>
+          </div>
+        </div>
+        <div class="row">
+          <button class="secondary shrink status-btn" data-status="draft" type="button">Set draft</button>
+          <button class="secondary shrink status-btn" data-status="live" type="button">Set live</button>
+          <button class="secondary shrink status-btn" data-status="closed" type="button">Close event</button>
+          <a id="leaderboard-link" class="shrink" target="_blank">Open leaderboard &rarr;</a>
+          <button id="delete-event-btn" class="danger shrink" type="button">Delete event</button>
+        </div>
+
+        <h3>Teams</h3>
+        <form id="team-form" class="row">
+          <div><label for="team-name">Team name</label><input id="team-name" required maxlength="100"></div>
+          <div><label for="team-members">Members (comma separated)</label><input id="team-members"></div>
+          <button class="shrink" type="submit">Add team</button>
+        </form>
+        <div id="team-list"></div>
+
+        <h3>Judges</h3>
+        <form id="judge-form" class="row">
+          <div><label for="judge-name">Judge name</label><input id="judge-name" required maxlength="100"></div>
+          <button class="shrink" type="submit">Add judge</button>
+        </form>
+        <div id="new-judge-code" class="hidden"></div>
+        <div id="judge-list"></div>
+
+        <h3>Scores <button id="refresh-scores" class="secondary small" type="button">Refresh</button></h3>
+        <div class="table-wrap"><table id="score-table"></table></div>
+
+        <h3>AI feedback</h3>
+        <p class="muted">Available after the event is closed. Generated team by team.</p>
+        <button id="generate-feedback" type="button">Generate feedback</button>
+        <div id="feedback-list"></div>
+      </section>
+    </div>
+  </main>
+
+  <script src="js/admin.js"></script>
+</body>
+</html>

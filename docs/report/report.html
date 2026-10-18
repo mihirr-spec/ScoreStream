@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Live Event Judging and Leaderboard System - Project Report</title>
+<style>
+  @page {
+    size: A4;
+    margin: 18mm 19mm 18mm 19mm;
+    @bottom-center {
+      content: counter(page);
+      font-family: "Segoe UI", Arial, sans-serif;
+      font-size: 9pt;
+      color: #6b7280;
+    }
+    @top-right {
+      content: "Live Event Judging and Leaderboard System";
+      font-family: "Segoe UI", Arial, sans-serif;
+      font-size: 8pt;
+      color: #9aa1ab;
+    }
+  }
+  @page :first {
+    margin: 0;
+    @bottom-center { content: none; }
+    @top-right { content: none; }
+  }
+
+  :root {
+    --ink: #1c2330;
+    --muted: #5b6472;
+    --rule: #d5dae1;
+    --accent: #1f3a5f;
+    --soft: #eef2f7;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    margin: 0;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 10pt;
+    line-height: 1.48;
+    color: var(--ink);
+    background: #fff;
+  }
+
+  h1, h2, h3, .sans { font-family: "Segoe UI", Arial, sans-serif; }
+  h2 {
+    font-size: 14pt;
+    color: var(--accent);
+    margin: 22px 0 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--rule);
+    break-after: avoid;
+  }
+  h3 { font-size: 11.5pt; margin: 16px 0 6px; break-after: avoid; }
+  p { margin: 0 0 9px; text-align: justify; }
+  ul, ol { margin: 0 0 10px; padding-left: 22px; }
+  li { margin-bottom: 3px; }
+  .page-break { break-before: page; }
+  .refs { font-size: 9pt; line-height: 1.35; }
+  .refs li { margin-bottom: 1px; }
+  .avoid { break-inside: avoid; }
+
+  code, pre { font-family: Consolas, "Courier New", monospace; }
+  code { font-size: 9pt; background: var(--soft); padding: 0 3px; border-radius: 2px; }
+  pre {
+    font-size: 8.4pt;
+    line-height: 1.4;
+    background: #f6f7f9;
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--accent);
+    padding: 9px 12px;
+    margin: 6px 0 12px;
+    white-space: pre-wrap;
+    break-inside: avoid;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 6px 0 14px;
+    font-size: 9pt;
+  }
+  tr { break-inside: avoid; }
+  th, td { border: 1px solid var(--rule); padding: 5px 8px; vertical-align: top; text-align: left; }
+  th { background: var(--soft); font-family: "Segoe UI", Arial, sans-serif; font-weight: 600; font-size: 8.8pt; }
+  td code { background: none; padding: 0; }
+
+  .caption {
+    font-family: "Segoe UI", Arial, sans-serif;
+    font-size: 8.5pt;
+    color: var(--muted);
+    text-align: center;
+    margin: 4px 0 14px;
+  }
+  figure { margin: 10px 0 4px; break-inside: avoid; text-align: center; }
+  figure img { max-width: 100%; border: 1px solid var(--rule); }
+  .fig-medium img { width: 72%; }
+  .fig-small img { width: 58%; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; align-items: start; break-inside: avoid; }
+  .grid2 figure { margin: 4px 0 0; }
+  .grid2 .caption { margin-bottom: 8px; }
+
+  .note {
+    background: var(--soft);
+    border-left: 3px solid var(--accent);
+    padding: 8px 12px;
+    margin: 8px 0 12px;
+    font-size: 9.8pt;
+  }
+
+  /* ---------- Cover ---------- */
+  .cover {
+    height: 297mm;
+    padding: 0 24mm;
+    position: relative;
+    border-top: 6px solid var(--accent);
+    font-family: "Segoe UI", Arial, sans-serif;
+  }
+  .cover .uni { padding-top: 34mm; letter-spacing: 3px; font-size: 11pt; color: var(--muted); }
+  .cover .course { margin-top: 10px; letter-spacing: 1.5px; font-size: 9pt; color: var(--accent); font-weight: 600; }
+  .cover h1 { font-size: 32pt; line-height: 1.15; margin: 26mm 0 10px; color: var(--ink); font-weight: 700; }
+  .cover .subtitle { font-family: Georgia, serif; font-style: italic; font-size: 13pt; color: var(--muted); max-width: 140mm; }
+  .cover .box {
+    position: absolute;
+    left: 24mm; right: 24mm; bottom: 30mm;
+    background: var(--soft);
+    border: 1px solid var(--rule);
+    border-left: 4px solid var(--accent);
+    padding: 16px 22px;
+    font-size: 10pt;
+  }
+  .cover .box .label { font-size: 8pt; letter-spacing: 1.5px; color: var(--muted); margin-bottom: 8px; }
+  .cover .member { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--rule); font-family: Georgia, serif; }
+  .cover .member span:last-child { color: var(--muted); font-family: "Segoe UI", Arial, sans-serif; }
+  .cover .meta { margin-top: 14px; line-height: 1.8; }
+  .cover .meta b { color: var(--accent); }
+
+  /* ---------- Contents ---------- */
+  .toc { width: 100%; border: none; font-size: 10.5pt; }
+  .toc td { border: none; border-bottom: 1px dotted var(--rule); padding: 5px 2px; }
+  .toc td:last-child { text-align: right; width: 40px; }
+  .toc .sub td:first-child { padding-left: 22px; color: var(--muted); font-size: 9.8pt; }
+
+  /* ---------- Diagram ---------- */
+  svg text { font-family: "Segoe UI", Arial, sans-serif; }
+</style>
+</head>
+<body>
+
+<!-- ======================= COVER ======================= -->
+<section class="cover">
+  <div class="uni">MANIPAL UNIVERSITY JAIPUR</div>
+  <div class="course">NOSQL DATABASES &nbsp;&bull;&nbsp; PROJECT REPORT</div>
+  <h1>Live Event Judging and<br>Leaderboard System</h1>
+  <div class="subtitle">A document-oriented platform for real-time scoring, instant leaderboards, and AI-generated feedback, built on MongoDB.</div>
+
+  <div class="box">
+    <div class="label">SUBMITTED BY</div>
+    <div class="member"><span>Mihir Sanghvi</span><span>Reg. No. 2427010544</span></div>
+    <div class="member"><span>Aryaman Sharma</span><span>Reg. No. 2427010058</span></div>
+    <div class="member"><span>Satyam</span><span>Reg. No. ______________</span></div>
+    <div class="meta">
+      <b>Programme</b>&nbsp; B.Tech (Artificial Intelligence &amp; Machine Learning), 5<sup>th</sup> Semester<br>
+      <b>Course</b>&nbsp; NoSQL Databases<br>
+      <b>Faculty</b>&nbsp; Dr. Arunangshu Pal<br>
+      <b>Session</b>&nbsp; 2026
+    </div>
+  </div>
+</section>
+
+<!-- ======================= ABSTRACT + CONTENTS ======================= -->
+<section class="page-break">
+  <h2>Abstract</h2>
+  <p>Hackathons, project expos and college competitions are usually judged on paper or in shared spreadsheets. Totals are added by hand, rankings are announced late, and teams rarely receive written feedback. This project builds a web based judging system in which judges score teams against a weighted rubric from their own devices, a public leaderboard updates instantly for everyone watching, and, once the event closes, a large language model summarises each team's judge comments into short, structured feedback.</p>
+  <p>The system is built on <b>MongoDB Atlas</b> using the official native Node.js driver, so every query, index and pipeline is visible in the code. It demonstrates the core NoSQL ideas of the course: a flexible document model that mixes embedding and referencing, <b>$jsonSchema</b> validation on every collection, compound and unique <b>indexes</b> verified with <b>explain()</b>, a multi-stage <b>aggregation pipeline</b> using <code>$group</code>, <code>$lookup</code>, <code>$setWindowFields</code> with <code>$rank</code> and <code>$merge</code>, and <b>Change Streams</b> that push live updates to browsers through Server-Sent Events. All six required test cases pass using Node's built-in test runner.</p>
+
+  <h2>Contents</h2>
+  <table class="toc">
+    <tr><td>1. Introduction</td><td>3</td></tr>
+    <tr><td>2. Technology Stack</td><td>3</td></tr>
+    <tr><td>3. System Architecture</td><td>4</td></tr>
+    <tr><td>4. Database Design</td><td>5</td></tr>
+    <tr><td>5. Schema Validation with $jsonSchema</td><td>6</td></tr>
+    <tr><td>6. Indexing Strategy and Query Performance</td><td>6</td></tr>
+    <tr><td>7. Leaderboard Aggregation Pipeline</td><td>7</td></tr>
+    <tr><td>8. Real-Time Updates: Change Streams and SSE</td><td>8</td></tr>
+    <tr><td>9. AI Feedback Module</td><td>9</td></tr>
+    <tr><td>10. Security and Input Validation</td><td>9</td></tr>
+    <tr><td>11. Application Interface</td><td>10</td></tr>
+    <tr><td>12. Testing</td><td>11</td></tr>
+    <tr><td>13. Conclusion and Future Scope</td><td>11</td></tr>
+    <tr><td>References</td><td>11</td></tr>
+  </table>
+</section>
+
+<!-- ======================= 1 + 2 ======================= -->
+<section class="page-break">
+  <h2>1. Introduction</h2>
+  <h3>1.1 Problem Statement</h3>
+  <p>At a live event several judges evaluate many teams at the same time. Manual judging creates four practical problems: arithmetic errors when weighted marks are combined, a judge accidentally scoring the same team twice, a long delay before results can be announced, and almost no useful written feedback reaching the teams. The goal is a system that removes all four.</p>
+
+  <h3>1.2 Objectives</h3>
+  <ul>
+    <li>Let an administrator create events with a custom weighted rubric, add teams, and issue one-time access codes to judges.</li>
+    <li>Let judges submit and edit marks only for their own event and only while it is live, with every input validated on the server.</li>
+    <li>Guarantee at the database level that a judge can score a team only once.</li>
+    <li>Compute averages and rankings inside MongoDB and push the updated leaderboard to all viewers in real time.</li>
+    <li>After the event closes, generate a summary, strengths, improvements and a sentiment score for each team using an LLM, with an offline fallback.</li>
+    <li>Prove the effect of indexing with <code>explain()</code> and cover the main behaviours with automated tests.</li>
+  </ul>
+
+  <h3>1.3 Scope</h3>
+  <p>The project includes a REST API, three browser pages (admin, judge and public leaderboard), database setup and seed scripts, a query analysis script and an automated test suite. User registration, multiple administrators and payment or ticketing features are outside the scope.</p>
+
+  <h3>1.4 Scoring Formula</h3>
+  <p>Each rubric criterion has a maximum mark and a weight, and the weights of an event add up to 1. A judge's total for a team is always out of 10:</p>
+  <pre>total = 10 x SUM( (mark_i / max_i) x weight_i )
+
+Example: marks 8, 7, 9 (max 10 each), weights 0.3, 0.4, 0.3
+total  = 10 x (0.24 + 0.28 + 0.27) = 7.9</pre>
+  <p>A team's leaderboard score is the average of the totals given by all judges who scored it.</p>
+
+  <h2>2. Technology Stack</h2>
+  <table>
+    <tr><th style="width:24%">Layer</th><th style="width:30%">Technology</th><th>Reason for the choice</th></tr>
+    <tr><td>Database</td><td>MongoDB Atlas (free cluster)</td><td>Document model fits nested rubrics and free-form criteria. Atlas runs as a replica set, which Change Streams require.</td></tr>
+    <tr><td>Database driver</td><td>Official <code>mongodb</code> driver (v7)</td><td>No ODM such as Mongoose, so all queries, indexes and pipelines are written directly and remain visible.</td></tr>
+    <tr><td>Server</td><td>Node.js 22 and Express 5</td><td>Lightweight HTTP server. Express 5 forwards errors from async handlers automatically.</td></tr>
+    <tr><td>Live updates</td><td>Server-Sent Events</td><td>One-way server to browser push over plain HTTP, with automatic reconnect in the browser.</td></tr>
+    <tr><td>Frontend</td><td>HTML, CSS, vanilla JavaScript</td><td>No build step and no framework, served directly by Express.</td></tr>
+    <tr><td>Authentication</td><td>JSON Web Tokens, SHA-256</td><td>Stateless signed tokens; judge codes are stored only as hashes.</td></tr>
+    <tr><td>AI</td><td>OpenRouter (OpenAI-compatible API)</td><td>Access to free LLMs through one HTTP endpoint, isolated in a single file.</td></tr>
+    <tr><td>Testing</td><td>Node built-in test runner</td><td><code>node --test</code> with the global <code>fetch</code>; no extra test libraries.</td></tr>
+  </table>
+</section>
+
+<!-- ======================= 3 ARCHITECTURE ======================= -->
+<section>
+  <h2>3. System Architecture</h2>
+  <p>The system follows a classic three-tier structure. Browsers talk to an Express server over a JSON API. The server holds all business rules and talks to MongoDB Atlas through a single shared connection pool. A Change Stream opened by the server is the link that turns a database write into a live update on every open leaderboard.</p>
+
+  <figure>
+    <svg viewBox="0 0 700 360" width="100%" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#1f3a5f"/>
+        </marker>
+      </defs>
+      <!-- Browsers -->
+      <text x="70" y="22" font-size="12" font-weight="600" fill="#5b6472" text-anchor="middle">BROWSERS</text>
+      <rect x="10" y="35" width="120" height="48" rx="5" fill="#eef2f7" stroke="#1f3a5f"/>
+      <text x="70" y="56" font-size="12" text-anchor="middle" fill="#1c2330">Admin page</text>
+      <text x="70" y="72" font-size="10" text-anchor="middle" fill="#5b6472">manage events</text>
+      <rect x="10" y="103" width="120" height="48" rx="5" fill="#eef2f7" stroke="#1f3a5f"/>
+      <text x="70" y="124" font-size="12" text-anchor="middle" fill="#1c2330">Judge page</text>
+      <text x="70" y="140" font-size="10" text-anchor="middle" fill="#5b6472">submit scores</text>
+      <rect x="10" y="171" width="120" height="48" rx="5" fill="#eef2f7" stroke="#1f3a5f"/>
+      <text x="70" y="192" font-size="12" text-anchor="middle" fill="#1c2330">Leaderboard</text>
+      <text x="70" y="208" font-size="10" text-anchor="middle" fill="#5b6472">EventSource (SSE)</text>
+
+      <!-- Server -->
+      <rect x="200" y="35" width="250" height="235" rx="6" fill="#ffffff" stroke="#1f3a5f" stroke-width="1.5"/>
+      <text x="325" y="56" font-size="12.5" font-weight="600" text-anchor="middle" fill="#1f3a5f">Node.js + Express server</text>
+      <rect x="215" y="68" width="220" height="34" rx="4" fill="#eef2f7" stroke="#c4ccd6"/>
+      <text x="325" y="89" font-size="10.5" text-anchor="middle" fill="#1c2330">middleware: auth.js, validate.js</text>
+      <rect x="215" y="110" width="220" height="34" rx="4" fill="#eef2f7" stroke="#c4ccd6"/>
+      <text x="325" y="131" font-size="10.5" text-anchor="middle" fill="#1c2330">routes: events, teams, judges, scores ...</text>
+      <rect x="215" y="152" width="105" height="48" rx="4" fill="#eef2f7" stroke="#c4ccd6"/>
+      <text x="267" y="172" font-size="10.5" text-anchor="middle" fill="#1c2330">scoring.js</text>
+      <text x="267" y="188" font-size="10.5" text-anchor="middle" fill="#1c2330">leaderboard.js</text>
+      <rect x="330" y="152" width="105" height="48" rx="4" fill="#eef2f7" stroke="#c4ccd6"/>
+      <text x="382" y="172" font-size="10.5" text-anchor="middle" fill="#1c2330">changeStream.js</text>
+      <text x="382" y="188" font-size="10.5" text-anchor="middle" fill="#1c2330">sse.js</text>
+      <rect x="215" y="208" width="220" height="34" rx="4" fill="#eef2f7" stroke="#c4ccd6"/>
+      <text x="325" y="229" font-size="10.5" text-anchor="middle" fill="#1c2330">ai.js (only file aware of the AI provider)</text>
+
+      <!-- MongoDB -->
+      <rect x="520" y="35" width="170" height="235" rx="6" fill="#ffffff" stroke="#1f3a5f" stroke-width="1.5"/>
+      <text x="605" y="56" font-size="12.5" font-weight="600" text-anchor="middle" fill="#1f3a5f">MongoDB Atlas</text>
+      <text x="605" y="72" font-size="10" text-anchor="middle" fill="#5b6472">replica set</text>
+      <g font-size="10.5" fill="#1c2330" text-anchor="middle">
+        <rect x="535" y="84" width="140" height="22" rx="3" fill="#eef2f7" stroke="#c4ccd6"/><text x="605" y="99">events</text>
+        <rect x="535" y="111" width="140" height="22" rx="3" fill="#eef2f7" stroke="#c4ccd6"/><text x="605" y="126">teams</text>
+        <rect x="535" y="138" width="140" height="22" rx="3" fill="#eef2f7" stroke="#c4ccd6"/><text x="605" y="153">judges</text>
+        <rect x="535" y="165" width="140" height="22" rx="3" fill="#dfe6ef" stroke="#1f3a5f"/><text x="605" y="180">scores</text>
+        <rect x="535" y="192" width="140" height="22" rx="3" fill="#eef2f7" stroke="#c4ccd6"/><text x="605" y="207">leaderboard</text>
+        <rect x="535" y="219" width="140" height="22" rx="3" fill="#eef2f7" stroke="#c4ccd6"/><text x="605" y="234">feedback</text>
+      </g>
+
+      <!-- Arrows browsers <-> server -->
+      <line x1="130" y1="59" x2="198" y2="85" stroke="#1f3a5f" stroke-width="1.3" marker-end="url(#arrow)"/>
+      <line x1="130" y1="127" x2="198" y2="127" stroke="#1f3a5f" stroke-width="1.3" marker-end="url(#arrow)"/>
+      <text x="164" y="120" font-size="9" text-anchor="middle" fill="#5b6472">JSON API</text>
+      <line x1="200" y1="195" x2="132" y2="195" stroke="#1f3a5f" stroke-width="1.3" stroke-dasharray="5 3" marker-end="url(#arrow)"/>
+      <text x="166" y="188" font-size="9" text-anchor="middle" fill="#5b6472">SSE push</text>
+
+      <!-- Server <-> DB -->
+      <line x1="450" y1="110" x2="518" y2="110" stroke="#1f3a5f" stroke-width="1.3" marker-end="url(#arrow)"/>
+      <text x="484" y="103" font-size="9" text-anchor="middle" fill="#5b6472">queries</text>
+      <line x1="533" y1="176" x2="452" y2="176" stroke="#1f3a5f" stroke-width="1.3" stroke-dasharray="5 3" marker-end="url(#arrow)"/>
+      <text x="492" y="169" font-size="9" text-anchor="middle" fill="#5b6472">change</text>
+      <text x="492" y="192" font-size="9" text-anchor="middle" fill="#5b6472">stream</text>
+
+      <!-- AI provider -->
+      <rect x="240" y="305" width="170" height="40" rx="5" fill="#eef2f7" stroke="#1f3a5f"/>
+      <text x="325" y="323" font-size="11.5" text-anchor="middle" fill="#1c2330">OpenRouter LLM</text>
+      <text x="325" y="337" font-size="9.5" text-anchor="middle" fill="#5b6472">chat completions API</text>
+      <line x1="325" y1="244" x2="325" y2="303" stroke="#1f3a5f" stroke-width="1.3" marker-end="url(#arrow)"/>
+    </svg>
+  </figure>
+  <div class="caption">Figure 1. High-level architecture. Dashed arrows are pushes that the receiver did not request.</div>
+
+  <h3>3.1 Life of a Score</h3>
+  <ol>
+    <li>A judge submits marks. The server verifies the token, the event status, the team and every mark, then computes the total.</li>
+    <li>The score is inserted into <code>scores</code>. The unique index rejects a duplicate.</li>
+    <li>MongoDB emits a change event. The server recomputes that event's leaderboard with one aggregation.</li>
+    <li>The new ranking is written to all open leaderboard pages over SSE, normally in well under a second.</li>
+  </ol>
+</section>
+
+<!-- ======================= 4 DATABASE DESIGN ======================= -->
+<section>
+  <h2>4. Database Design</h2>
+  <p>The database contains six collections. Relationships are expressed with ObjectId references, except for the rubric, which is embedded inside its event.</p>
+  <table>
+    <tr><th style="width:16%">Collection</th><th style="width:46%">Fields</th><th>Purpose</th></tr>
+    <tr><td><code>events</code></td><td>name, status (draft, live, closed), rubric [ {key, label, max, weight} ], createdAt</td><td>One competition and its embedded scoring rubric</td></tr>
+    <tr><td><code>teams</code></td><td>eventId, name, members [String]</td><td>Teams taking part in an event</td></tr>
+    <tr><td><code>judges</code></td><td>eventId, name, codeHash</td><td>Judges and the SHA-256 hash of their access code</td></tr>
+    <tr><td><code>scores</code></td><td>eventId, teamId, judgeId, criteria {key: Number}, total, comment, submittedAt</td><td>One judge's marks for one team</td></tr>
+    <tr><td><code>leaderboard</code></td><td>eventId, teamId, teamName, avgScore, judgesCount, rank, updatedAt</td><td>Pre-computed ranking, written only by <code>$merge</code></td></tr>
+    <tr><td><code>feedback</code></td><td>eventId, teamId, summary, strengths [ ], improvements [ ], sentiment {label, score}, source, generatedAt</td><td>AI or mock feedback for each team</td></tr>
+  </table>
+
+  <h3>4.1 Embedding versus Referencing</h3>
+  <p><b>The rubric is embedded</b> in the event document. It is small (a handful of criteria), it is always read together with its event, and it never needs to be queried on its own. Embedding means one read returns everything needed to validate a score.</p>
+  <p><b>Scores are referenced</b>, not embedded inside teams or events. Scores are written frequently by many judges at the same time, they grow with the number of judges multiplied by teams, and they are queried independently (per event, per team, per judge). Embedding them would create large, constantly rewritten documents and would make the unique judge-team rule impossible to enforce with an index.</p>
+  <p><b>The leaderboard is a materialised view.</b> Rather than recomputing rankings on every page view, the aggregation stores its result in a collection, and reading the leaderboard becomes a simple indexed query. The team name is copied into each row (controlled denormalisation) so that the public page needs no join.</p>
+
+  <h3>4.2 Sample Documents</h3>
+  <pre>// events
+{ "_id": ObjectId("6ad4..f68d"), "name": "Demo Hackathon 2026", "status": "live",
+  "rubric": [ { "key": "innovation", "label": "Innovation", "max": 10, "weight": 0.3 },
+              { "key": "design",     "label": "Design",     "max": 10, "weight": 0.4 },
+              { "key": "execution",  "label": "Execution",  "max": 10, "weight": 0.3 } ],
+  "createdAt": ISODate("2026-10-18T10:30:00Z") }
+
+// scores
+{ "_id": ObjectId("6ad4..f6b2"), "eventId": ObjectId("6ad4..f68d"),
+  "teamId": ObjectId("6ad4..f68e"), "judgeId": ObjectId("6ad4..f693"),
+  "criteria": { "innovation": 8, "design": 7, "execution": 9 },
+  "total": 7.9, "comment": "Great idea and solid execution.",
+  "submittedAt": ISODate("2026-10-18T10:42:11Z") }</pre>
+</section>
+
+<!-- ======================= 5 + 6 ======================= -->
+<section>
+  <h2>5. Schema Validation with $jsonSchema</h2>
+  <p>MongoDB is schemaless by default, so a bug in application code could silently store malformed documents. Every collection is therefore created with a <code>$jsonSchema</code> validator, <code>validationLevel: "strict"</code> and <code>validationAction: "error"</code>, so the database itself rejects any insert or update with the wrong shape. The setup script is idempotent: new collections are created with the validator, existing ones are updated with <code>collMod</code>.</p>
+  <pre>scores: {
+  $jsonSchema: {
+    bsonType: "object",
+    required: ["eventId", "teamId", "judgeId", "criteria", "total", "submittedAt"],
+    properties: {
+      eventId:  { bsonType: "objectId" },
+      teamId:   { bsonType: "objectId" },
+      judgeId:  { bsonType: "objectId" },
+      criteria: { bsonType: "object", additionalProperties: { bsonType: "number" } },
+      total:    { bsonType: "number", minimum: 0, maximum: 10 },
+      comment:  { bsonType: "string" },
+      submittedAt: { bsonType: "date" }
+    }
+  }
+}</pre>
+  <p>Notable rules in the other validators:</p>
+  <ul>
+    <li><code>criteria</code> accepts any key but only numeric values, because its keys depend on each event's rubric.</li>
+    <li><code>events.status</code> is restricted with an <code>enum</code> to draft, live or closed.</li>
+    <li><code>judges.codeHash</code> must match the pattern <code>^[a-f0-9]{64}$</code>, so a plain-text code can never be stored by mistake.</li>
+    <li><code>feedback.sentiment.score</code> must lie between -1 and 1.</li>
+  </ul>
+  <p>Some rules cannot be expressed in <code>$jsonSchema</code>, such as rubric weights summing to 1 or criteria keys matching the event's rubric. These are enforced in the Node.js validation layer, giving two layers of protection.</p>
+
+  <h2>6. Indexing Strategy and Query Performance</h2>
+  <table>
+    <tr><th style="width:17%">Collection</th><th style="width:33%">Index</th><th>Why it exists</th></tr>
+    <tr><td><code>scores</code></td><td>UNIQUE { eventId: 1, teamId: 1, judgeId: 1 }</td><td>Stops a judge scoring the same team twice. Duplicate inserts fail with error 11000, returned to the client as HTTP 409.</td></tr>
+    <tr><td><code>scores</code></td><td>{ eventId: 1 }</td><td>Serves the <code>$match</code> stage of the leaderboard pipeline and the admin score list.</td></tr>
+    <tr><td><code>teams</code></td><td>{ eventId: 1 }</td><td>Fast listing of the teams in an event.</td></tr>
+    <tr><td><code>judges</code></td><td>{ eventId: 1 }</td><td>Fast listing of the judges in an event.</td></tr>
+    <tr><td><code>judges</code></td><td>UNIQUE { codeHash: 1 }</td><td>Judge login looks up a hash; also guarantees no two judges share a code.</td></tr>
+    <tr><td><code>leaderboard</code></td><td>UNIQUE { eventId: 1, teamId: 1 }</td><td>Required by <code>$merge</code>, which matches rows on these fields.</td></tr>
+    <tr><td><code>feedback</code></td><td>UNIQUE { eventId: 1, teamId: 1 }</td><td>One feedback document per team; regeneration is an upsert.</td></tr>
+  </table>
+  <p>Because the unique rule lives in the database rather than only in application code, it holds even if two requests from the same judge arrive at the same instant.</p>
+</section>
+
+<!-- ======================= 6.1 + 7 ======================= -->
+<section>
+  <h3>6.1 Measuring the Effect with explain()</h3>
+  <p>The script <code>scripts/explain.js</code> runs two queries with <code>explain("executionStats")</code> and reports the winning plan. It was run once after dropping the scores indexes and once after recreating them. The seeded database holds 16 scores across two events, 10 of which belong to the event being queried.</p>
+  <table>
+    <tr><th>Query</th><th>Indexes</th><th>Plan</th><th>Keys examined</th><th>Docs examined</th><th>Returned</th></tr>
+    <tr><td rowspan="2"><code>scores.find({ eventId })</code></td><td>Dropped</td><td>COLLSCAN</td><td>0</td><td>16</td><td>10</td></tr>
+    <tr><td>Present</td><td>IXSCAN (eventId_1)</td><td>10</td><td>10</td><td>10</td></tr>
+    <tr><td rowspan="2">Leaderboard aggregation</td><td>Dropped</td><td>COLLSCAN, GROUP</td><td>0</td><td>16</td><td>5</td></tr>
+    <tr><td>Present</td><td>IXSCAN, FETCH, GROUP</td><td>10</td><td>10</td><td>5</td></tr>
+  </table>
+  <pre>Query 1: scores.find({ eventId })            (after: npm run explain)
+Plan stages        : FETCH -> IXSCAN
+RESULT             : IXSCAN (index scan) using index eventId_1
+Documents returned : 10
+Index keys examined: 10
+Documents examined : 10</pre>
+  <p>Without the index MongoDB must read every score in the collection and discard those from other events. With the index it reads only the matching entries, so the documents examined equal the documents returned. On this small demo the time difference is negligible, but the ratio grows with the number of events: with 100 events of similar size a collection scan would read about 100 times more documents than needed.</p>
+
+  <h2>7. Leaderboard Aggregation Pipeline</h2>
+  <p>All averaging and ranking is done inside MongoDB by a single pipeline in <code>services/leaderboard.js</code>. Node.js only starts it.</p>
+  <table>
+    <tr><th style="width:5%">#</th><th style="width:22%">Stage</th><th>What it does</th></tr>
+    <tr><td>1</td><td><code>$match</code></td><td>Keeps only the scores of one event. Placed first so it can use the eventId index.</td></tr>
+    <tr><td>2</td><td><code>$group</code></td><td>One result per team: <code>$avg</code> of total gives avgScore, <code>$sum: 1</code> counts judges.</td></tr>
+    <tr><td>3</td><td><code>$set</code> + <code>$round</code></td><td>Rounds the average to 2 decimals before ranking, so displayed ties share a rank.</td></tr>
+    <tr><td>4</td><td><code>$lookup</code> + <code>$unwind</code></td><td>Joins the teams collection to fetch each team's name; drops scores of deleted teams.</td></tr>
+    <tr><td>5</td><td><code>$setWindowFields</code> + <code>$rank</code></td><td>Sorts by avgScore descending and assigns competition ranks (1, 2, 2, 4).</td></tr>
+    <tr><td>6</td><td><code>$project</code></td><td>Shapes each row exactly like a leaderboard document.</td></tr>
+    <tr><td>7</td><td><code>$merge</code></td><td>Upserts rows into <code>leaderboard</code> on { eventId, teamId }.</td></tr>
+  </table>
+  <pre>{ $setWindowFields: { sortBy: { avgScore: -1 }, output: { rank: { $rank: {} } } } },
+{ $merge: { into: "leaderboard", on: ["eventId", "teamId"],
+            whenMatched: "replace", whenNotMatched: "insert" } }</pre>
+  <p>Since <code>$merge</code> only inserts and replaces, rows for teams that no longer have scores would remain. Each run stamps rows with the same <code>updatedAt</code>, and any row of that event with an older timestamp is deleted immediately afterwards.</p>
+</section>
+
+<!-- ======================= 8 ======================= -->
+<section>
+  <h2>8. Real-Time Updates: Change Streams and SSE</h2>
+  <p>A Change Stream lets an application subscribe to data changes as they happen. MongoDB reads its replication log (the oplog) and pushes each change to the subscriber, so the server never has to poll. This is the reason the project needs a replica set, which every Atlas cluster provides.</p>
+  <pre>const stream = db.collection("scores").watch(
+  [{ $match: { operationType: { $in: ["insert", "update", "replace", "delete"] } } }],
+  { fullDocument: "updateLookup" }
+);
+stream.on("change", (change) =&gt; {
+  queue = queue.then(() =&gt; handleChange(change));   // one change at a time, in order
+});</pre>
+  <h3>8.1 Handling Each Change</h3>
+  <ul>
+    <li><b>Insert, update, replace:</b> the full document is available (for updates because of <code>updateLookup</code>), so the server knows the exact event and recomputes only that leaderboard.</li>
+    <li><b>Delete:</b> a delete event carries only the deleted <code>_id</code>, not the document, so the event is unknown. The server safely recomputes every event whose status is <code>live</code>.</li>
+    <li><b>Loop prevention:</b> the handler never writes to <code>scores</code>. It writes only to <code>leaderboard</code>, which is not being watched. Writing to the watched collection would produce a new change event and an infinite loop.</li>
+    <li><b>Ordering:</b> changes are chained on a promise queue, so two recomputes of the same event can never overlap.</li>
+  </ul>
+  <h3>8.2 Server-Sent Events</h3>
+  <p>The endpoint <code>GET /api/events/:eventId/stream</code> responds with <code>Content-Type: text/event-stream</code> and keeps the connection open. It sends the current leaderboard immediately, registers the response in <code>sse.js</code>, and from then on every recompute writes a message of the form <code>event: leaderboard</code> followed by the JSON rows. A comment line every 25 seconds keeps proxies from closing idle connections, and the browser's <code>EventSource</code> reconnects automatically. SSE was preferred over WebSockets because the data flows in one direction only and SSE needs no extra library.</p>
+  <figure class="fig-medium">
+    <img src="img/leaderboard.png" alt="Live leaderboard">
+  </figure>
+  <div class="caption">Figure 2. Public leaderboard after Judge Three scored Byte Bandits. The row updated to 3 judges and 7.90 without a page refresh.</div>
+</section>
+
+<!-- ======================= 9 + 10 ======================= -->
+<section>
+  <h2>9. AI Feedback Module</h2>
+  <p>When an event is closed, the administrator can generate feedback. For each team the server collects all non-empty judge comments and sends them to an LLM in a single request through OpenRouter's OpenAI-compatible endpoint. All provider-specific details (URL, headers, model name, prompt and reply parsing) live in <code>services/ai.js</code>, so switching to another provider means editing one file.</p>
+  <pre>POST {AI_BASE_URL}/chat/completions
+Authorization: Bearer {AI_API_KEY}
+{ "model": "{AI_MODEL}", "temperature": 0.3,
+  "messages": [ { "role": "system", "content": "Reply with JSON ONLY ..." },
+                { "role": "user",   "content": "Team: MediTrack  Judges' comments: 1. ..." } ] }
+
+Expected reply: { "summary": "...", "strengths": ["..."], "improvements": ["..."],
+                  "sentiment": { "label": "positive|neutral|negative", "score": -1..1 } }</pre>
+  <h3>9.1 Reliability Measures</h3>
+  <ul>
+    <li>Models sometimes wrap JSON in markdown code fences, so a leading and trailing fence is stripped before <code>JSON.parse</code>.</li>
+    <li>The parsed reply is normalised (labels checked, score clamped to the range -1 to 1, lists limited) so it always satisfies the feedback validator.</li>
+    <li>On an HTTP error, a timeout or invalid JSON, the request is retried once.</li>
+    <li>If there is no API key, or the retry also fails, a clearly labelled mock result is stored with <code>source: "mock"</code>, so the demo works offline and the tests need no network.</li>
+    <li>Free models allow roughly 20 requests per minute, so teams are processed one by one with a 3.5 second pause between real AI calls.</li>
+  </ul>
+
+  <h2>10. Security and Input Validation</h2>
+  <table>
+    <tr><th style="width:30%">Concern</th><th>Measure taken</th></tr>
+    <tr><td>Admin password check</td><td>Both values are hashed with SHA-256 and compared using <code>crypto.timingSafeEqual</code>, which prevents timing attacks.</td></tr>
+    <tr><td>Judge access codes</td><td>Generated with <code>crypto.randomBytes</code>, shown once, and stored only as a SHA-256 hash.</td></tr>
+    <tr><td>Sessions</td><td>Signed JWTs that expire after 12 hours. A judge token stops working if that judge is deleted.</td></tr>
+    <tr><td>Authorisation</td><td>Admin routes return 401 without a token and 403 for a judge token. Judges can score only teams of their own event and edit only their own scores.</td></tr>
+    <tr><td>Marks</td><td>Must be real numbers between 0 and the criterion's max. Unknown or missing criteria are rejected.</td></tr>
+    <tr><td>Event state</td><td>Scoring is allowed only while the event is live; feedback only after it is closed; the rubric is locked once scores exist.</td></tr>
+    <tr><td>Identifiers</td><td>Every id is checked to be a 24-character hex string before it reaches the driver.</td></tr>
+    <tr><td>Error responses</td><td>Always <code>{ "error": "message" }</code> with a correct status code (400, 401, 403, 404, 409). Stack traces are logged on the server only.</td></tr>
+    <tr><td>Browser output</td><td>Pages insert data with <code>textContent</code> only, so names cannot inject HTML or scripts.</td></tr>
+    <tr><td>Secrets</td><td>Kept in <code>.env</code>, which is git-ignored. Only <code>.env.example</code> with empty values is tracked.</td></tr>
+  </table>
+</section>
+
+<!-- ======================= 11 INTERFACE ======================= -->
+<section>
+  <h2>11. Application Interface</h2>
+  <p>The three pages are plain HTML and JavaScript served by Express. The judge page shows one card per team with an input for each rubric criterion and a live total preview; the server recomputes and stores the authoritative total.</p>
+  <div class="grid2">
+    <div><figure><img src="img/judge.png" alt="Judge scoring page"></figure>
+      <div class="caption">Figure 3. Judge page: weighted criteria, a comment for AI feedback and a total preview (8.1 / 10).</div></div>
+    <div><figure><img src="img/admin.png" alt="Admin event management"></figure>
+      <div class="caption">Figure 4. Admin page: event status controls, embedded rubric summary and team management.</div></div>
+    <div><figure><img src="img/scores.png" alt="Admin scores table"></figure>
+      <div class="caption">Figure 5. Admin scores table, built with two $lookup stages that join team and judge names.</div></div>
+    <div><figure><img src="img/feedback.png" alt="Closed event with feedback"></figure>
+      <div class="caption">Figure 6. Closed event with final ranking and generated feedback (no API key set, so marked MOCK).</div></div>
+  </div>
+</section>
+
+<section>
+  <!-- ======================= 12 TESTING ======================= -->
+  <h2>12. Testing</h2>
+  <p>The suite in <code>tests/api.test.js</code> uses Node's built-in test runner. It starts the real Express app on a random port, connects to a separate <code>&lt;DB_NAME&gt;_test</code> database built with the same validators and indexes, runs the Change Stream, and drops the test database at the end.</p>
+  <table>
+    <tr><th style="width:5%">#</th><th style="width:40%">Test case</th><th>Expected and verified behaviour</th><th style="width:9%">Result</th></tr>
+    <tr><td>1</td><td>Judge submits valid marks</td><td>201 Created, total equals 7.9, one document saved</td><td>Pass</td></tr>
+    <tr><td>2</td><td>Marks above the allowed max</td><td>400 with "must be between 0 and 10"</td><td>Pass</td></tr>
+    <tr><td>3</td><td>Same judge scores the same team twice</td><td>409 from the API; a direct insert also fails with code 11000</td><td>Pass</td></tr>
+    <tr><td>4</td><td>Judge edits a score</td><td>Total recalculated to 2.0; Change Stream moves the team from rank 1 to rank 2</td><td>Pass</td></tr>
+    <tr><td>5</td><td>Unauthorised user on an admin route</td><td>401 with no or a forged token, 403 with a judge token</td><td>Pass</td></tr>
+    <tr><td>6</td><td>Generate AI feedback (mock)</td><td>409 while live; after closing, summary and sentiment saved with source "mock"</td><td>Pass</td></tr>
+  </table>
+  <p class="note"><b>Result of <code>npm test</code>:</b> 6 tests, 6 passed, 0 failed, in 1.9 seconds.</p>
+  <p>Manual checks also confirmed correct errors for unknown criteria, string marks, malformed JSON, invalid ids and wrong passwords, and that an invalid API key falls back to mock feedback after one retry.</p>
+</section>
+
+<!-- ======================= 13 + REFERENCES ======================= -->
+<section>
+  <h2>13. Conclusion and Future Scope</h2>
+  <p>The project delivers a working real-time judging platform and, more importantly for this course, shows how MongoDB's own features carry the core logic. Validation rules live in <code>$jsonSchema</code>, the one-score-per-judge rule lives in a unique compound index, averaging and ranking live in an aggregation pipeline that materialises its result with <code>$merge</code>, and live updates are driven by a Change Stream rather than polling. The <code>explain()</code> results confirm that the chosen indexes turn full collection scans into index scans that read only the documents needed.</p>
+  <p>Possible extensions include:</p>
+  <ul>
+    <li>Using change stream resume tokens so that no change is missed if the server restarts.</li>
+    <li>Enabling pre-images so that delete events identify their event and only that leaderboard is recomputed.</li>
+    <li>Normalising each judge's marks (for example z-scores) to reduce the effect of strict or lenient judges, and supporting multiple administrator accounts.</li>
+  </ul>
+
+  <h2>References</h2>
+  <ol class="refs">
+    <li>MongoDB Documentation, "Schema Validation", mongodb.com/docs/manual/core/schema-validation</li>
+    <li>MongoDB Documentation, "Indexes" and "Unique Indexes", mongodb.com/docs/manual/indexes</li>
+    <li>MongoDB Documentation, "Aggregation Pipeline", "$setWindowFields", "$rank" and "$merge", mongodb.com/docs/manual/aggregation</li>
+    <li>MongoDB Documentation, "Change Streams", mongodb.com/docs/manual/changeStreams</li>
+    <li>MongoDB Documentation, "Explain Results", mongodb.com/docs/manual/reference/explain-results</li>
+    <li>MDN Web Docs, "Using server-sent events", developer.mozilla.org</li>
+    <li>OpenRouter API Reference, openrouter.ai/docs</li>
+  </ol>
+</section>
+
+</body>
+</html>

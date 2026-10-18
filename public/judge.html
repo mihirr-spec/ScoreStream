@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Judge - Live Judging</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header>
+    <h1>Live Judging - Judge</h1>
+    <nav>
+      <a href="admin.html">Admin</a>
+      <a href="judge.html">Judge</a>
+      <a href="leaderboard.html">Leaderboard</a>
+    </nav>
+  </header>
+
+  <main>
+    <div id="message" class="message hidden"></div>
+
+    <section id="login-section" class="card">
+      <h2>Judge login</h2>
+      <form id="login-form" class="row">
+        <div>
+          <label for="code">Your access code</label>
+          <input id="code" required autocomplete="off" placeholder="e.g. JUDGE003">
+        </div>
+        <button class="shrink" type="submit">Log in</button>
+      </form>
+    </section>
+
+    <div id="app-section" class="hidden">
+      <section class="card">
+        <div class="row">
+          <div>
+            <h2 id="event-name" style="margin:0"></h2>
+            <span id="event-status" class="pill"></span>
+            <span id="judge-name" class="muted"></span>
+          </div>
+          <a id="leaderboard-link" class="shrink" target="_blank">Leaderboard &rarr;</a>
+          <button id="refresh-btn" class="secondary shrink" type="button">Refresh</button>
+          <button id="logout-btn" class="secondary shrink" type="button">Log out</button>
+        </div>
+        <p id="not-live" class="message error hidden">This event is not live, so scoring is disabled.</p>
+      </section>
+
+      <div id="team-cards"></div>
+    </div>
+  </main>
+
+  <script src="js/judge.js"></script>
+</body>
+</html>
