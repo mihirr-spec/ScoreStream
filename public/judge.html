@@ -12,7 +12,7 @@
     try { if (localStorage.getItem('theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch (e) {}
   </script>
   <link rel="icon" type="image/png" href="img/favicon.png">
-  <link rel="stylesheet" href="css/app.css?v=17">
+  <link rel="stylesheet" href="css/app.css?v=18">
 </head>
 <body>
   <aside class="sidebar" aria-label="Primary sidebar">
@@ -23,24 +23,26 @@
     <nav aria-label="Main navigation" id="side-nav">
       <a class="nav-item" href="#overview" data-nav="overview">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-        <span>Overview</span>
+        <span>Dashboard</span>
       </a>
-      <a class="nav-item" href="#score" data-nav="score">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg>
-        <span>Score teams</span>
+      <a class="nav-item" href="#invitations" data-nav="invitations">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
+        <span>Invitations</span>
+        <span class="nav-badge hidden" id="invite-badge">0</span>
       </a>
-      <a class="nav-item" id="leaderboard-link" target="_blank">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 20V11m7 9V4m7 16v-7"/></svg>
-        <span>Leaderboard ↗</span>
-      </a>
+      <div class="nav-group" id="events-nav">
+        <div class="nav-label">Events I judge</div>
+        <div id="events-nav-list"></div>
+      </div>
     </nav>
     <div class="side-foot">Judge workspace</div>
   </aside>
 
   <header class="topbar">
-    <div class="crumbs"><span class="muted">Judging</span><span class="muted">/</span><strong id="section-context">Overview</strong></div>
+    <div class="crumbs" id="crumbs"></div>
     <div class="top-actions">
-      <label class="search-top" for="team-search"><span aria-hidden="true">⌕</span><input id="team-search" aria-label="Search teams" placeholder="Search teams"></label>
+      <span class="live-dot hidden" id="live-flag">Live updates</span>
+      <label class="search-top hidden" for="team-search" id="search-wrap"><span aria-hidden="true">⌕</span><input id="team-search" aria-label="Search teams" placeholder="Search teams"></label>
       <button type="button" class="icon-button theme-toggle" aria-label="Switch between light and dark mode">
         <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
         <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
@@ -58,61 +60,90 @@
     </div>
   </header>
 
-  <main class="main" id="top">
+  <main class="main">
+    <div id="welcome-banner" class="banner info hidden">🎉 <strong>Your judge account is ready.</strong> Give your judge code below to event organisers - they use it to invite you, and you accept here.</div>
 
-    <div class="page-heading">
-      <div>
-        <h1 id="event-name">Loading...</h1>
-        <div class="heading-meta"><span id="event-status"></span><span>Score each team. You can edit your score while the event is live.</span></div>
-      </div>
-      <button type="button" class="secondary" id="refresh-btn">Refresh</button>
-    </div>
-
-    <div id="not-live" class="banner hidden"><strong>Scoring is closed.</strong> This event is not live, so marks cannot be submitted or changed.</div>
-
+    <!-- ===================== Dashboard ===================== -->
     <div data-view="overview">
-    <section class="kpis" aria-label="Your progress">
-      <article class="card kpi">
-        <div class="kpi-top"><span>Teams</span><span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M17 5a3 3 0 0 1 0 6m2 4a5 5 0 0 1 2 4v1"/></svg></span></div>
-        <div class="kpi-number" id="stat-teams">0</div>
-        <p class="kpi-note">In this event</p>
-      </article>
-      <article class="card kpi">
-        <div class="kpi-top"><span>Scored by You</span><span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 5 5L20 7"/></svg></span></div>
-        <div class="kpi-number" id="stat-done">0</div>
-        <p class="kpi-note">Submitted scores</p>
-      </article>
-      <article class="card kpi">
-        <div class="kpi-top"><span>Remaining</span><span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span></div>
-        <div class="kpi-number" id="stat-left">0</div>
-        <p class="kpi-note">Teams still to score</p>
-      </article>
-      <article class="card kpi">
-        <div class="kpi-top"><span>Your Average</span><span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 20V11m7 9V4m7 16v-7"/></svg></span></div>
-        <div class="kpi-number" id="stat-avg">-</div>
-        <p class="kpi-note">Out of 10</p>
-      </article>
-    </section>
-
-    <section class="card section-card">
-      <div class="section-head">
+      <div class="page-heading">
         <div>
-          <h2>Your progress</h2>
-          <p class="section-sub">Every team in this event and whether you have scored it.</p>
+          <h1 id="judge-name">Loading...</h1>
+          <p>Events you judge, and invitations from organisers.</p>
         </div>
-        <a class="primary" href="#score">Score teams →</a>
       </div>
-      <div id="progress-list"></div>
-    </section>
+
+      <section class="kpis" aria-label="Your judging">
+        <article class="card kpi">
+          <div class="kpi-top"><span>Judge Code</span><span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 9.2-9.2M17 6l3 3M14.5 8.5l2 2"/></svg></span></div>
+          <div class="kpi-number team-code" id="judge-code">-</div>
+          <p class="kpi-note"><button type="button" class="tiny-button" id="copy-code">Copy</button> Give it to organisers</p>
+        </article>
+        <article class="card kpi">
+          <div class="kpi-top"><span>Events</span><span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 2v6m10-6v6M3 11h18"/></svg></span></div>
+          <div class="kpi-number" id="kpi-events">0</div>
+          <p class="kpi-note">Events you accepted</p>
+        </article>
+        <article class="card kpi">
+          <div class="kpi-top"><span>Left to Score</span><span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span></div>
+          <div class="kpi-number" id="kpi-left">0</div>
+          <p class="kpi-note">Teams in live events</p>
+        </article>
+        <article class="card kpi">
+          <div class="kpi-top"><span>Invitations</span><span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></span></div>
+          <div class="kpi-number" id="kpi-invites">0</div>
+          <p class="kpi-note">Waiting for your answer</p>
+        </article>
+      </section>
+
+      <section class="card section-card">
+        <div class="section-head">
+          <div>
+            <h2>Your events</h2>
+            <p class="section-sub">Open an event to score its teams one at a time.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="table-wide">
+            <thead><tr><th scope="col">Event</th><th scope="col">Status</th><th scope="col">Your progress</th><th scope="col">Actions</th></tr></thead>
+            <tbody id="event-rows"></tbody>
+          </table>
+        </div>
+        <p id="no-events" class="empty-row hidden">No events yet. When an organiser invites you, the invitation pops up here.</p>
+      </section>
     </div>
 
-    <div data-view="score" class="hidden">
+    <!-- ===================== Invitations ===================== -->
+    <div data-view="invitations" class="hidden">
+      <div class="page-heading">
+        <div>
+          <h1>Invitations</h1>
+          <p>Organisers who want you to judge their event. You join only if you accept.</p>
+        </div>
+      </div>
+      <section class="card section-card">
+        <div id="invite-list"></div>
+      </section>
+    </div>
+
+    <!-- ===================== One event: score its teams ===================== -->
+    <div data-view="event" class="hidden">
+      <a class="back-link" href="#overview">← All my events</a>
+      <div class="page-heading">
+        <div>
+          <h1 id="event-name"></h1>
+          <div class="heading-meta"><span id="event-status"></span><span id="steps-note"></span></div>
+        </div>
+        <a class="secondary" id="leaderboard-link" target="_blank">Leaderboard ↗</a>
+      </div>
+
+      <div id="not-live" class="banner hidden"></div>
+
       <div class="judge-layout">
         <aside class="card section-card team-steps">
           <div class="section-head">
             <div>
               <h3>Teams</h3>
-              <p class="section-sub" id="steps-note"></p>
+              <p class="section-sub">✓ = scored by you</p>
             </div>
           </div>
           <ol id="team-steps" class="step-list"></ol>
@@ -122,7 +153,21 @@
     </div>
   </main>
 
-  <script src="js/common.js?v=17"></script>
-  <script src="js/judge.js?v=17"></script>
+  <!-- Invitation pop-up -->
+  <div id="invite-modal" class="modal-backdrop hidden" role="presentation">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="invite-title">
+      <p class="eyebrow">Invitation <span id="invite-step"></span></p>
+      <h2 id="invite-title"></h2>
+      <p id="invite-text"></p>
+      <div class="modal-actions">
+        <button type="button" class="secondary" id="invite-later">Decide later</button>
+        <button type="button" class="danger-button" id="invite-decline">Decline</button>
+        <button type="button" class="primary" id="invite-accept">Accept &amp; judge</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/common.js?v=18"></script>
+  <script src="js/judge.js?v=18"></script>
 </body>
 </html>

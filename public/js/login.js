@@ -1,7 +1,7 @@
 // One sign-in screen for all three roles. The selected role decides which
 // API endpoint we call and which page we open afterwards.
 //   Student (team)  -> team code + password, or register a new team
-//   Judge           -> name + the access code the organiser gave them
+//   Judge           -> judge code + password, or register as a judge
 //   Administrator   -> username + password, or create an organiser account
 
 const ROLES = {
@@ -16,6 +16,7 @@ const ROLES = {
       name: { field: 'name', label: 'Team name', placeholder: 'e.g. Byte Bandits', autocomplete: 'off' },
       members: true,
       question: 'New team?',
+      title: 'team',
       action: 'Register your team',
       sub: 'Register once and get a permanent team code. Organisers use it to invite you to events.',
       next: 'team.html?welcome=1',
@@ -23,10 +24,20 @@ const ROLES = {
   },
   judge: {
     endpoint: '/api/auth/judge-login',
-    name: { field: 'name', label: 'Your name', placeholder: 'Exactly as the organiser added you', autocomplete: 'name' },
-    secret: { field: 'code', label: 'Judge access code', placeholder: 'e.g. 4F9A1C2B', isPassword: false },
+    name: { field: 'code', label: 'Judge code', placeholder: 'e.g. JG3H8M2P', autocomplete: 'username' },
+    secret: { field: 'password', label: 'Password', placeholder: 'Your password', isPassword: true },
     next: 'judge.html',
-    forgot: 'Your name and code come from the event organiser. Codes expire when the event ends - ask the organiser for a new one.',
+    forgot: 'Your judge code is shown on your judge dashboard. There is no password reset yet - register again if you lost it.',
+    register: {
+      endpoint: '/api/auth/judge-register',
+      name: { field: 'name', label: 'Your name', placeholder: 'e.g. Prof. Rao', autocomplete: 'name' },
+      members: false,
+      question: 'New judge?',
+      action: 'Create a judge account',
+      sub: 'Register once and get a permanent judge code. Organisers use it to invite you to judge their events.',
+      title: 'judge account',
+      next: 'judge.html?welcome=1',
+    },
   },
   admin: {
     endpoint: '/api/auth/admin-login',
@@ -39,6 +50,7 @@ const ROLES = {
       name: { field: 'username', label: 'Username', placeholder: '3-30 letters or digits', autocomplete: 'username' },
       members: false,
       question: 'New organiser?',
+      title: 'account',
       action: 'Create an account',
       sub: 'Register as an organiser to create events, add judges and invite teams.',
       next: 'admin.html',
@@ -95,13 +107,13 @@ function selectRole(role) {
   $('forgot-btn').classList.toggle('hidden', registering);
   $('forgot-text').classList.add('hidden');
 
-  // Sign up exists for teams and organisers, not judges (the organiser adds judges).
+  // Every role can sign up: teams, judges and organisers.
   $('register-foot').classList.toggle('hidden', !r.register);
   if (r.register) {
     $('register-q').textContent = registering ? 'Already registered?' : r.register.question;
     $('register-toggle').textContent = registering ? 'Sign in' : r.register.action;
   }
-  $('login-title').replaceChildren(...(registering ? [role === 'team' ? 'Register your ' : 'Create your ', el('span', role === 'team' ? 'team' : 'account')] : ['Welcome ', el('span', 'back')]));
+  $('login-title').replaceChildren(...(registering ? [role === 'team' ? 'Register your ' : 'Create your ', el('span', r.register.title)] : ['Welcome ', el('span', 'back')]));
   $('login-sub').textContent = registering ? r.register.sub : 'Sign in to manage your events, scores and teams.';
   $('login-btn').firstChild.textContent = registering ? (role === 'team' ? 'Register team ' : 'Create account ') : 'Sign In ';
 

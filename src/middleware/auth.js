@@ -11,8 +11,7 @@ const config = require('../config');
 const { getDb } = require('../db');
 const { httpError, parseId } = require('./validate');
 
-// SHA-256 as 64 hex characters. Judge access codes are stored ONLY as this hash,
-// so even someone who reads the database can't see the real codes.
+// SHA-256 as 64 hex characters.
 function sha256(text) {
   return crypto.createHash('sha256').update(text).digest('hex');
 }
@@ -58,26 +57,28 @@ async function assertEventAccess(req, eventId) {
   }
 }
 
-// Judges: besides checking the token, make sure the judge still exists
-// (the admin may have deleted them after they logged in).
+// Judges sign in to their judge ACCOUNT (like teams), which can be in many events.
 async function requireJudge(req, res, next) {
   const payload = readToken(req);
-  if (payload.role !== 'judge') {
+  if (payload.role !== 'judge' || !payload.accountId) {
     throw httpError(403, 'Judge access only');
   }
-  const judge = await getDb()
-    .collection('judges')
-    .findOne({ _id: parseId(payload.judgeId, 'judge id') });
-  if (!judge) {
+  const account = await getDb()
+    .collection('judgeAccounts')
+    .findOne({ _id: parseId(payload.accountId, 'judge id') }, { projection: { passwordHash: 0 } });
+  if (!account) {
     throw httpError(401, 'This judge account no longer exists');
   }
-  // Codes expire when the admin ends the event, and that also ends open sessions.
-  if (judge.expiredAt) {
-    throw httpError(401, 'This event has ended, so your judge code has expired');
-  }
-  // Later handlers use req.judge (its eventId decides which event they may score).
-  req.judge = judge;
+  req.judgeAccount = account;
   next();
+}
+
+// A judge's place in one event (a "judges" document). Scores point at its _id.
+// 403 when this judge account was never added to (or was removed from) the event.
+async function findJudgeSeat(req, eventId) {
+  const seat = await getDb().collection('judges').findOne({ eventId, accountId: req.judgeAccount._id });
+  if (!seat) throw httpError(403, 'You are not a judge in this event');
+  return seat;
 }
 
 // Teams sign in to their team ACCOUNT (not to one event). A team can only see
@@ -97,14 +98,17 @@ async function requireTeam(req, res, next) {
   next();
 }
 
-// A team's permanent code, e.g. "TM7K4Q2X". No 0/O or 1/I, so it is easy to read out.
+// Permanent account codes: "TM7K4Q2X" for a team, "JG3H8M2P" for a judge.
+// No 0/O or 1/I, so they are easy to read out.
 const CODE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-function generateTeamCode() {
+function generateAccountCode(prefix) {
   const bytes = crypto.randomBytes(6);
-  let code = 'TM';
+  let code = prefix;
   for (const byte of bytes) code += CODE_LETTERS[byte % CODE_LETTERS.length];
   return code;
 }
+const generateTeamCode = () => generateAccountCode('TM');
+const generateJudgeCode = () => generateAccountCode('JG');
 
 // Hashing for admin and team passwords. Unlike access codes, passwords are chosen by people
 // and are often short, so we use scrypt: a SLOW hash with a random salt, which makes
@@ -123,21 +127,16 @@ function checkPassword(password, stored) {
   return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
 }
 
-// Random 8-character access code, e.g. "4F9A1C2B" (used for judges and teams).
-// crypto.randomBytes is cryptographically random, unlike Math.random().
-function generateCode() {
-  return crypto.randomBytes(4).toString('hex').toUpperCase();
-}
-
 module.exports = {
   sha256,
   signToken,
   requireAdmin,
   assertEventAccess,
   requireJudge,
+  findJudgeSeat,
   requireTeam,
-  generateCode,
   generateTeamCode,
+  generateJudgeCode,
   hashPassword,
   checkPassword,
 };

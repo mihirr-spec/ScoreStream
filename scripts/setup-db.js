@@ -139,18 +139,48 @@ const validators = {
     },
   },
 
+  // A judge who registered on the platform. Like a team, the code never changes and
+  // is how an admin invites them; the password (scrypt hash) proves it IS that judge.
+  judgeAccounts: {
+    $jsonSchema: {
+      bsonType: 'object',
+      required: ['name', 'code', 'passwordHash', 'createdAt'],
+      properties: {
+        name: { bsonType: 'string', minLength: 1, maxLength: 100 },
+        code: { bsonType: 'string', pattern: '^JG[A-Z0-9]{6}$' },
+        passwordHash: { bsonType: 'string', pattern: '^[a-f0-9]{32}:[a-f0-9]{128}$' },
+        createdAt: { bsonType: 'date' },
+      },
+    },
+  },
+
+  // An admin asking a judge to judge an event. The judge joins only if they accept.
+  judgeInvitations: {
+    $jsonSchema: {
+      bsonType: 'object',
+      required: ['eventId', 'accountId', 'invitedBy', 'status', 'createdAt'],
+      properties: {
+        eventId: { bsonType: 'objectId' },
+        accountId: { bsonType: 'objectId' }, // reference to judgeAccounts._id
+        invitedBy: { bsonType: 'string' },
+        status: { enum: ['pending', 'accepted', 'declined'] },
+        createdAt: { bsonType: 'date' },
+        respondedAt: { bsonType: 'date' },
+      },
+    },
+  },
+
+  // A judge's seat in ONE event. Scores point at this document's _id.
+  // name is copied from the judge account when they accept the invitation.
   judges: {
     $jsonSchema: {
       bsonType: 'object',
-      required: ['eventId', 'name', 'codeHash'],
+      required: ['eventId', 'accountId', 'name', 'joinedAt'],
       properties: {
         eventId: { bsonType: 'objectId' },
+        accountId: { bsonType: 'objectId' }, // reference to judgeAccounts._id
         name: { bsonType: 'string', minLength: 1 },
-        // SHA-256 written as hex is always exactly 64 characters 0-9 a-f.
-        // So the plain access code can never be stored here by mistake.
-        codeHash: { bsonType: 'string', pattern: '^[a-f0-9]{64}$' },
-        // Set when the admin ends the event: the code stops working from then on.
-        expiredAt: { bsonType: 'date' },
+        joinedAt: { bsonType: 'date' },
       },
     },
   },
@@ -250,9 +280,22 @@ const indexes = {
   ],
   judges: [
     { key: { eventId: 1 }, options: { name: 'eventId_1' } },
-    // Judge login looks a judge up by the hash of their code, so index it.
-    // UNIQUE also guarantees two judges can never share the same code.
-    { key: { codeHash: 1 }, options: { unique: true, name: 'unique_codeHash' } },
+    // NO DUPLICATES: a judge account can be in each event only once.
+    { key: { eventId: 1, accountId: 1 }, options: { unique: true, name: 'unique_event_account' } },
+    // "Which events does this judge judge?" for the judge dashboard.
+    { key: { accountId: 1 }, options: { name: 'accountId_1' } },
+  ],
+  judgeAccounts: [
+    // The judge code is how admins find a judge, so it must be unique.
+    { key: { code: 1 }, options: { unique: true, name: 'unique_code' } },
+  ],
+  judgeInvitations: [
+    // At most ONE pending invitation per judge per event (PARTIAL: answered ones don't count).
+    {
+      key: { eventId: 1, accountId: 1 },
+      options: { unique: true, partialFilterExpression: { status: 'pending' }, name: 'unique_pending_invite' },
+    },
+    { key: { accountId: 1, status: 1 }, options: { name: 'accountId_1_status_1' } },
   ],
   leaderboard: [
     // $merge matches incoming rows to existing ones "on" { eventId, teamId }.
@@ -319,6 +362,13 @@ async function setupDatabase(db) {
   console.log('\nCollections + validators:');
   for (const [name, validator] of Object.entries(validators)) {
     await setupCollection(db, name, validator);
+  }
+
+  // Judges used to sign in with a per-event access code; judge accounts replace that,
+  // so the old code index goes.
+  if ((await db.listCollections({ name: 'judges' }).toArray()).length) {
+    const old = await db.collection('judges').indexes();
+    if (old.some((ix) => ix.name === 'unique_codeHash')) await db.collection('judges').dropIndex('unique_codeHash');
   }
 
   console.log('\nIndexes:');

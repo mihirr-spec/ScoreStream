@@ -12,7 +12,7 @@
     try { if (localStorage.getItem('theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch (e) {}
   </script>
   <link rel="icon" type="image/png" href="img/favicon.png">
-  <link rel="stylesheet" href="css/app.css?v=17">
+  <link rel="stylesheet" href="css/app.css?v=18">
 </head>
 <body>
   <aside class="sidebar" aria-label="Primary sidebar">
@@ -225,24 +225,19 @@
           <article class="card detail-card">
             <div class="section-head">
               <div>
-                <h3>Add a judge</h3>
-                <p class="section-sub">A unique code is generated. The judge signs in with this name + the code. Codes expire when you end the event.</p>
+                <h3>Invite a judge</h3>
+                <p class="section-sub">Enter the judge's code (judges register at the Judge sign-in and find their code on their dashboard). They join once they accept.</p>
               </div>
             </div>
             <form id="judge-form" class="inline-form">
-              <input id="judge-name" class="text-input" required maxlength="100" placeholder="Judge name, e.g. Prof. Rao" aria-label="Judge name">
-              <button type="submit" class="primary">Add judge</button>
+              <input id="judge-code" class="text-input" required maxlength="20" placeholder="Judge code, e.g. JG3H8M2P" aria-label="Judge code" autocomplete="off">
+              <button type="submit" class="primary">Send invitation</button>
             </form>
           </article>
 
           <article class="card detail-card" style="margin-top:18px">
-            <div class="section-head">
-              <div>
-                <h3>New judge codes</h3>
-                <p class="section-sub">Only a hash is stored, so each code is shown once. Copy or download them now.</p>
-              </div>
-            </div>
-            <div id="code-list"></div>
+            <div class="section-head"><h3>Waiting for an answer</h3><span id="judge-invite-count" class="count">0</span></div>
+            <ul id="judge-invite-list" class="person-list"></ul>
           </article>
         </div>
 
@@ -250,7 +245,7 @@
           <div class="section-head">
             <div>
               <h3>Judging progress</h3>
-              <p class="section-sub">How many teams each judge has scored</p>
+              <p class="section-sub">How many teams each judge has scored - updates live</p>
             </div>
           </div>
           <div id="judge-progress"></div>
@@ -321,7 +316,7 @@
       <div class="danger-card">
         <div>
           <h3>End event</h3>
-          <p id="end-text">Closes scoring, publishes the final ranking, writes AI feedback for every team and expires every judge code.</p>
+          <p id="end-text">Closes scoring, publishes the final ranking and writes AI feedback for every team.</p>
         </div>
         <div class="control-row">
           <button type="button" class="danger-button" id="end-event">End Event</button>
@@ -354,7 +349,7 @@
     </div>
   </div>
 
-  <script src="js/common.js?v=17"></script>
-  <script src="js/admin.js?v=17"></script>
+  <script src="js/common.js?v=18"></script>
+  <script src="js/admin.js?v=18"></script>
 </body>
 </html>

@@ -13,7 +13,7 @@
     try { if (localStorage.getItem('theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch (e) {}
   </script>
   <link rel="icon" type="image/png" href="img/favicon.png">
-  <link rel="stylesheet" href="css/style.css?v=17">
+  <link rel="stylesheet" href="css/style.css?v=18">
 </head>
 <body class="landing">
 
@@ -101,7 +101,7 @@
           <div class="tl-line"><span class="tl-dot"></span></div>
           <div class="tl-icon"><svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="14" y="10" width="36" height="46" rx="3"/><path d="M24 10V7h16v3"/><rect x="24" y="5" width="16" height="7" rx="2"/><path d="M21 24l3 3 6-6M21 36l3 3 6-6"/><path d="M34 25h10M34 37h10M21 48h23"/><path d="M15.5 14.5l1 38" opacity=".45"/></svg></div>
           <h3>Set up the event</h3>
-          <p>The admin creates the event, sets a weighted rubric, and adds teams and judges. Everyone gets a private code.</p>
+          <p>The admin creates the event, sets a weighted rubric, and invites judges and teams by their codes. They accept to join.</p>
         </div>
         <div class="tl-step reveal">
           <div class="tl-num">02</div>
@@ -145,7 +145,7 @@
           <p>The organiser sets everything up and stays in control from the first score to the final results.</p>
           <ul class="checks">
             <li>Create events with a custom weighted rubric</li>
-            <li>Add teams and judges, each with a one-time access code</li>
+            <li>Invite judges and teams by their code; they accept to join</li>
             <li>Open scoring, close the event, and see every score in one table</li>
             <li>Generate AI feedback for every team with one click</li>
           </ul>
@@ -163,13 +163,15 @@
           <h3>Score in seconds, from any device</h3>
           <p>Judges watch the pitch, tap the stars for each criterion and add a comment. The maths is done for them.</p>
           <ul class="checks">
-            <li>See every team in the event with its members</li>
+            <li>Accept invitations from organisers and judge many events</li>
+            <li>See every team in the event with its repo and slides</li>
             <li>Rate each criterion with stars (or fine-tune with a slider) and see the total live</li>
             <li>Edit a score any time while the event is live</li>
             <li>Can never score the same team twice, the database blocks it</li>
           </ul>
           <div class="hero-ctas">
             <a class="btn btn-primary" href="login.html?role=judge">Log in as Judge</a>
+            <a class="btn btn-ghost" href="login.html?role=judge&amp;register=1">Register as a judge</a>
           </div>
         </div>
       </div>
@@ -272,7 +274,7 @@
     </div>
   </section>
 
-  <script src="js/common.js?v=17"></script>
-  <script src="js/landing.js?v=17"></script>
+  <script src="js/common.js?v=18"></script>
+  <script src="js/landing.js?v=18"></script>
 </body>
 </html>

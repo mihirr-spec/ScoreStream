@@ -13,7 +13,7 @@ const { pipeline } = require('stream/promises');
 const express = require('express');
 const { GridFSBucket } = require('mongodb');
 const { getDb } = require('../db');
-const { requireAdmin, assertEventAccess, requireJudge, requireTeam } = require('../middleware/auth');
+const { requireAdmin, assertEventAccess, requireJudge, findJudgeSeat, requireTeam } = require('../middleware/auth');
 const { httpError, parseId } = require('../middleware/validate');
 
 const router = express.Router();
@@ -159,11 +159,12 @@ router.get('/team/events/:eventId/slides', requireTeam, async (req, res) => {
 
 // ---------- Judge + admin downloads ----------
 
-// GET /api/judge/teams/:teamId/slides  -> a judge opens a team's slides (own event only)
+// GET /api/judge/teams/:teamId/slides  -> a judge opens a team's slides (events they judge only)
 router.get('/judge/teams/:teamId/slides', requireJudge, async (req, res) => {
   const teamId = parseId(req.params.teamId, 'team id');
-  const team = await getDb().collection('teams').findOne({ _id: teamId, eventId: req.judge.eventId }, { projection: { _id: 1 } });
-  if (!team) throw httpError(404, 'Team not found in your event');
+  const team = await getDb().collection('teams').findOne({ _id: teamId }, { projection: { eventId: 1 } });
+  if (!team) throw httpError(404, 'Team not found');
+  await findJudgeSeat(req, team.eventId);
   await sendSlides(res, teamId);
 });
 

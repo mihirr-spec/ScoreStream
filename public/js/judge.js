@@ -1,23 +1,206 @@
-// Judge page. #overview shows your progress; #score shows ONE team at a time:
-// rate each criterion with stars (or the slider), write feedback, then
-// "Submit & next" moves on to the next team you have not scored yet.
+// Judge dashboard. A judge signs in to their ACCOUNT, which can judge many events.
+//   #overview       judge code, events you judge, your progress
+//   #invitations    organisers asking you to judge their event
+//   #event/<id>     score that event's teams ONE at a time: stars (or slider) per
+//                   criterion, feedback, then "Submit & next" moves to the next team.
+// New invitations pop up as soon as the dashboard opens.
 // 5 stars = the criterion's max mark, so 1 star = max / 5 (e.g. 2 marks out of 10).
 // The page shows a total preview, but the SERVER calculates and stores the real total.
 
 requireLogin('judge');
 
-const goTo = setupViews(
-  {
-    overview: { crumb: 'Overview' },
-    score: { crumb: 'Score teams' },
-  },
-  'overview'
+let me = null; // { judge, events, invitations } from /api/judge/me
+let data = null; // { judge, event, teams, myScores } from /api/judge/events/<id>
+let openEventId = null;
+let currentTeamId = null; // the team on the scoring card (by id, so new teams don't shift it)
+let liveSource = null;
+const shownPopups = new Set(); // invitations already shown in the pop-up this visit
+
+if (new URLSearchParams(location.search).get('welcome') === '1') $('welcome-banner').classList.remove('hidden');
+
+function pill(status) {
+  return el('span', status, `pill ${status}`);
+}
+
+function setCrumbs(items) {
+  const box = $('crumbs');
+  box.replaceChildren();
+  items.forEach((item, i) => {
+    if (i > 0) box.append(el('span', '/', 'muted'));
+    if (i === items.length - 1) box.append(el('strong', item.label));
+    else if (item.href) {
+      const link = el('a', item.label);
+      link.href = item.href;
+      box.append(link);
+    } else box.append(el('span', item.label, 'muted'));
+  });
+}
+
+// ---------- Router ----------
+function parseRoute() {
+  const [view, id] = location.hash.slice(1).split('/');
+  if (view === 'event' && /^[a-f0-9]{24}$/i.test(id || '')) return { view: 'event', eventId: id };
+  return { view: view === 'invitations' ? 'invitations' : 'overview', eventId: null };
+}
+
+async function route() {
+  const { view, eventId } = parseRoute();
+  for (const section of document.querySelectorAll('[data-view]')) section.classList.toggle('hidden', section.dataset.view !== view);
+  for (const link of document.querySelectorAll('.nav-item[data-nav]')) {
+    const active = link.dataset.nav === (view === 'event' ? `event-${eventId}` : view);
+    link.classList.toggle('active', active);
+    if (active) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
+  }
+  $('search-wrap').classList.toggle('hidden', view !== 'event');
+  if (view === 'overview') setCrumbs([{ label: 'Judging' }, { label: 'Dashboard' }]);
+  if (view === 'invitations') setCrumbs([{ label: 'Judging' }, { label: 'Invitations' }]);
+  if (view !== 'event') stopLive();
+  else await openEvent(eventId);
+  window.scrollTo(0, 0);
+}
+window.addEventListener('hashchange', () => safely(route));
+
+// ---------- Account, events and invitations ----------
+async function loadMe() {
+  me = await api('GET', '/api/judge/me', undefined, 'judge');
+  const { judge, events, invitations } = me;
+
+  setupUserBar('judge', judge.name);
+  setupShell(judge.name);
+  $('judge-name').textContent = judge.name;
+  $('judge-code').textContent = judge.code;
+  $('kpi-events').textContent = events.length;
+  $('kpi-left').textContent = events.filter((e) => e.status === 'live').reduce((sum, e) => sum + Math.max(e.teamCount - e.scoredCount, 0), 0);
+  $('kpi-invites').textContent = invitations.length;
+  $('invite-badge').textContent = invitations.length;
+  $('invite-badge').classList.toggle('hidden', invitations.length === 0);
+
+  // "Your events" table.
+  const rows = $('event-rows');
+  rows.replaceChildren();
+  for (const e of events) {
+    const row = el('tr');
+    const name = el('td', null, 'event-name');
+    const link = el('a', e.name);
+    link.href = `#event/${e.eventId}`;
+    link.style.textDecoration = 'none';
+    name.append(link);
+    const status = el('td');
+    status.append(pill(e.status));
+    const progress = el('td');
+    const track = el('span', null, 'progress-track');
+    const fill = el('span', null, 'progress-fill');
+    fill.style.width = e.teamCount ? `${Math.round((e.scoredCount / e.teamCount) * 100)}%` : '0%';
+    track.append(fill);
+    progress.append(track, ` ${e.scoredCount} / ${e.teamCount} teams`);
+    const open = el('a', e.status === 'live' ? 'Score teams' : 'View', 'row-action');
+    open.href = `#event/${e.eventId}`;
+    const actions = el('td');
+    actions.append(open);
+    row.append(name, status, progress, actions);
+    rows.append(row);
+  }
+  $('no-events').classList.toggle('hidden', events.length > 0);
+
+  // Sidebar: one link per event.
+  const nav = $('events-nav-list');
+  nav.replaceChildren();
+  if (events.length === 0) nav.append(el('p', 'No events yet', 'nav-label'));
+  for (const e of events) {
+    const link = el('a', null, 'nav-item');
+    link.href = `#event/${e.eventId}`;
+    link.dataset.nav = `event-${e.eventId}`;
+    link.append(el('span', e.name, 'step-name'), pill(e.status));
+    nav.append(link);
+  }
+  const { view, eventId } = parseRoute();
+  for (const link of nav.querySelectorAll('.nav-item')) link.classList.toggle('active', view === 'event' && link.dataset.nav === `event-${eventId}`);
+
+  renderInvitations();
+  // Pop up every invitation we have not shown yet in this visit.
+  const fresh = invitations.filter((inv) => !shownPopups.has(inv._id));
+  if (fresh.length && $('invite-modal').classList.contains('hidden')) showPopup(fresh[0]);
+}
+
+async function answer(inv, accept) {
+  const res = await api('POST', `/api/judge/invitations/${inv._id}`, { accept }, 'judge');
+  toast(res.message);
+  await loadMe();
+  if (accept) location.hash = `#event/${inv.eventId}`;
+  else await route();
+}
+
+// The Invitations page: one row per pending invitation.
+function renderInvitations() {
+  const box = $('invite-list');
+  box.replaceChildren();
+  if (me.invitations.length === 0) {
+    box.append(el('p', 'No invitations right now. Give your judge code to an organiser and their invitation appears here.', 'empty-text'));
+    return;
+  }
+  for (const inv of me.invitations) {
+    const row = el('div', null, 'access-row');
+    const who = el('div', null, 'access-who');
+    who.append(el('span', `From ${inv.invitedBy}  ·  ${new Date(inv.createdAt).toLocaleDateString()}`), inv.eventName);
+    const actions = el('div', null, 'action-row');
+    const decline = el('button', 'Decline', 'danger-button');
+    decline.type = 'button';
+    decline.addEventListener('click', () => safely(() => answer(inv, false)));
+    const accept = el('button', 'Accept & judge', 'primary');
+    accept.type = 'button';
+    accept.addEventListener('click', () => safely(() => answer(inv, true)));
+    actions.append(decline, accept);
+    row.append(who, actions);
+    box.append(row);
+  }
+}
+
+// ---------- Invitation pop-up ----------
+let popupInvite = null;
+function showPopup(inv) {
+  popupInvite = inv;
+  shownPopups.add(inv._id);
+  const index = me.invitations.findIndex((i) => i._id === inv._id);
+  $('invite-step').textContent = me.invitations.length > 1 ? `${index + 1} of ${me.invitations.length}` : '';
+  $('invite-title').textContent = `Judge "${inv.eventName}"?`;
+  $('invite-text').textContent =
+    `${inv.invitedBy} wants you to judge the event "${inv.eventName}". ` +
+    'You are only added if you accept. You can then see its teams and score them.';
+  $('invite-modal').classList.remove('hidden');
+  $('invite-accept').focus();
+}
+function closePopup() {
+  $('invite-modal').classList.add('hidden');
+  popupInvite = null;
+}
+function nextPopup() {
+  closePopup();
+  const next = me.invitations.find((inv) => !shownPopups.has(inv._id));
+  if (next) showPopup(next);
+}
+$('invite-later').addEventListener('click', nextPopup);
+for (const [id, accept] of [['invite-accept', true], ['invite-decline', false]]) {
+  $(id).addEventListener('click', () =>
+    safely(async () => {
+      const inv = popupInvite;
+      closePopup();
+      await answer(inv, accept);
+    })
+  );
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !$('invite-modal').classList.contains('hidden')) nextPopup();
+});
+
+$('copy-code').addEventListener('click', () =>
+  safely(async () => {
+    await navigator.clipboard.writeText(me.judge.code);
+    toast('Judge code copied');
+  })
 );
-$('refresh-btn').addEventListener('click', () => safely(loadDashboard));
 
-let data = null; // { judge, event, teams, myScores } from /api/judge/me
-let currentIndex = 0;
-
+// ---------- One event: scoring ----------
 // Same formula as services/scoring.js - only used for the live preview.
 function previewTotal(rubric, criteria) {
   let sum = 0;
@@ -26,61 +209,91 @@ function previewTotal(rubric, criteria) {
 }
 
 const scoreFor = (team) => data.myScores.find((s) => s.teamId === team._id);
+const currentIndex = () => Math.max(data.teams.findIndex((t) => t._id === currentTeamId), 0);
 
-async function loadDashboard() {
-  data = await api('GET', '/api/judge/me', undefined, 'judge');
-  const { judge, event, teams, myScores } = data;
-
-  setupUserBar('judge', judge.name);
-  setupShell(judge.name);
+async function loadEvent(eventId) {
+  data = await api('GET', `/api/judge/events/${eventId}`, undefined, 'judge');
+  const { event, teams } = data;
+  setCrumbs([{ label: 'Judging', href: '#overview' }, { label: event.name }]);
   $('event-name').textContent = event.name;
-  $('event-status').replaceChildren(el('span', event.status, `pill ${event.status}`));
+  $('event-status').replaceChildren(pill(event.status));
   $('leaderboard-link').href = `leaderboard.html?event=${event._id}`;
-  $('not-live').classList.toggle('hidden', event.status === 'live');
-
-  $('stat-teams').textContent = teams.length;
-  $('stat-done').textContent = myScores.length;
-  $('stat-left').textContent = Math.max(teams.length - myScores.length, 0);
-  $('stat-avg').textContent = myScores.length ? (myScores.reduce((sum, s) => sum + s.total, 0) / myScores.length).toFixed(2) : '-';
-
-  // Overview page: one row per team, scored or not. Clicking opens it on the Score page.
-  const progress = $('progress-list');
-  progress.replaceChildren();
-  if (teams.length === 0) progress.append(el('p', 'No teams in this event yet.', 'empty-text'));
-  teams.forEach((team, i) => {
-    const mine = scoreFor(team);
-    const row = el('div', null, 'score-row');
-    const name = el('button', team.name, 'score-label');
-    name.type = 'button';
-    name.addEventListener('click', () => openTeam(i));
-    const right = el('span', null, 'action-row');
-    right.style.alignItems = 'center';
-    if (mine) right.append(el('span', `${mine.total} / 10`, 'score-status'));
-    right.append(el('span', mine ? 'scored' : 'not scored', `pill ${mine ? 'live' : 'draft'}`));
-    row.append(name, right);
-    progress.append(row);
-  });
-
-  if (currentIndex >= teams.length) currentIndex = 0;
-  renderSteps();
-  renderCurrent();
-}
-
-function openTeam(index) {
-  currentIndex = index;
-  renderSteps();
-  renderCurrent();
-  goTo('score');
-}
-
-// Index of the next team (after `from`) that this judge has not scored, or -1.
-function nextUnscored(from) {
-  const { teams } = data;
-  for (let step = 1; step <= teams.length; step++) {
-    const i = (from + step) % teams.length;
-    if (!scoreFor(teams[i])) return i;
+  $('steps-note').textContent = `${data.myScores.length} of ${teams.length} teams scored by you`;
+  const banner = $('not-live');
+  banner.classList.toggle('hidden', event.status === 'live');
+  if (event.status === 'draft') {
+    banner.replaceChildren(el('strong', 'Not started yet. '), 'Scoring unlocks when the organiser makes the event live - this page updates by itself.');
+  } else if (event.status === 'closed') {
+    banner.replaceChildren(el('strong', 'This event has ended. '), 'Scoring is closed; your scores are shown read-only.');
   }
-  return -1;
+  if (!teams.some((t) => t._id === currentTeamId)) currentTeamId = teams.length ? teams[0]._id : null;
+}
+
+async function openEvent(eventId) {
+  if (openEventId !== eventId) {
+    stopLive();
+    openEventId = eventId;
+    currentTeamId = null;
+    await loadEvent(eventId);
+    // Start on the first team you have not scored yet.
+    const first = data.teams.find((t) => !scoreFor(t));
+    if (first) currentTeamId = first._id;
+    watchEvent(eventId);
+  } else {
+    await loadEvent(eventId);
+  }
+  renderSteps();
+  renderCurrent();
+}
+
+// Live updates for the open event:
+//   status -> the organiser made it live / ended it: reload so rating unlocks or locks
+//   roster -> a team joined: add it to the list without touching the card you're filling in
+function watchEvent(eventId) {
+  liveSource = new EventSource(`/api/events/${eventId}/stream`);
+  liveSource.addEventListener('status', () =>
+    safely(async () => {
+      await loadEvent(eventId);
+      renderSteps();
+      renderCurrent();
+      await loadMe();
+    })
+  );
+  liveSource.addEventListener('roster', () =>
+    safely(async () => {
+      const shown = currentTeamId;
+      await loadEvent(eventId);
+      renderSteps();
+      if (shown !== currentTeamId) renderCurrent();
+    })
+  );
+  liveSource.addEventListener('open', () => $('live-flag').classList.remove('hidden'));
+  liveSource.addEventListener('error', () => $('live-flag').classList.add('hidden'));
+}
+
+function stopLive() {
+  if (liveSource) liveSource.close();
+  liveSource = null;
+  openEventId = null;
+  $('live-flag').classList.add('hidden');
+}
+
+function showTeam(teamId) {
+  currentTeamId = teamId;
+  renderSteps();
+  renderCurrent();
+  window.scrollTo(0, 0);
+}
+
+// Id of the next team (after the current one) that you have not scored, or null.
+function nextUnscored() {
+  const { teams } = data;
+  const from = currentIndex();
+  for (let step = 1; step <= teams.length; step++) {
+    const team = teams[(from + step) % teams.length];
+    if (!scoreFor(team)) return team._id;
+  }
+  return null;
 }
 
 // Left column: every team with its number, status and your total.
@@ -89,23 +302,22 @@ function renderSteps() {
   const query = $('team-search').value.trim().toLowerCase();
   const list = $('team-steps');
   list.replaceChildren();
-  $('steps-note').textContent = `${data.myScores.length} of ${teams.length} scored`;
+  if (teams.length === 0) list.append(el('li', 'No teams yet.', 'empty-text'));
   teams.forEach((team, i) => {
     if (query && !team.name.toLowerCase().includes(query)) return;
     const mine = scoreFor(team);
     const item = el('li');
-    const button = el('button', null, i === currentIndex ? 'current' : '');
+    const button = el('button', null, team._id === currentTeamId ? 'current' : '');
     button.type = 'button';
     button.append(el('span', mine ? '✓' : String(i + 1), `step-num${mine ? ' done' : ''}`), el('span', team.name, 'step-name'));
     if (mine) button.append(el('span', mine.total, 'step-total'));
-    button.addEventListener('click', () => openTeam(i));
+    button.addEventListener('click', () => showTeam(team._id));
     item.append(button);
     list.append(item);
   });
 }
 $('team-search').addEventListener('input', () => {
-  renderSteps();
-  goTo('score');
+  if (data) renderSteps();
 });
 
 // Right column: the current team's rating card.
@@ -114,17 +326,19 @@ function renderCurrent() {
   box.replaceChildren();
   const { event, teams } = data;
   if (teams.length === 0) {
-    box.append(el('div', 'No teams in this event yet.', 'card done-card'));
+    box.append(el('div', 'No teams in this event yet. They appear here as soon as they join.', 'card done-card'));
     return;
   }
-  box.append(buildTeamCard(event, teams[currentIndex], scoreFor(teams[currentIndex])));
+  const team = teams[currentIndex()];
+  box.append(buildTeamCard(event, team, scoreFor(team)));
 }
 
 // One team: a star row + slider per rubric criterion, feedback, and submit / navigation.
 function buildTeamCard(event, team, existing) {
   const live = event.status === 'live';
+  const index = currentIndex();
   const card = el('section', null, 'card score-card focus');
-  card.append(el('p', `Team ${currentIndex + 1} of ${data.teams.length}`, 'step-counter'));
+  card.append(el('p', `Team ${index + 1} of ${data.teams.length}`, 'step-counter'));
   const head = el('div', null, 'section-head');
   head.append(el('h3', team.name), el('span', existing ? 'scored' : 'not scored', `pill ${existing ? 'live' : 'draft'}`));
   card.append(head, el('div', team.members.join(', ') || 'No members listed', 'members'));
@@ -205,12 +419,12 @@ function buildTeamCard(event, team, existing) {
   const nav = el('div', null, 'nav-buttons');
   const prev = el('button', '← Previous', 'secondary');
   prev.type = 'button';
-  prev.disabled = currentIndex === 0;
-  prev.addEventListener('click', () => openTeam(currentIndex - 1));
+  prev.disabled = index === 0;
+  prev.addEventListener('click', () => showTeam(data.teams[index - 1]._id));
   const skip = el('button', 'Next →', 'secondary');
   skip.type = 'button';
-  skip.disabled = currentIndex >= data.teams.length - 1;
-  skip.addEventListener('click', () => openTeam(currentIndex + 1));
+  skip.disabled = index >= data.teams.length - 1;
+  skip.addEventListener('click', () => showTeam(data.teams[index + 1]._id));
   const submit = el('button', existing ? 'Update & next' : 'Submit & next', 'primary');
   submit.type = 'submit';
   submit.disabled = !live;
@@ -253,12 +467,12 @@ function buildTeamCard(event, team, existing) {
           ? await api('PUT', `/api/scores/${existing._id}`, body, 'judge')
           : await api('POST', '/api/scores', { teamId: team._id, ...body }, 'judge');
         toast(`Saved ${team.name}: ${saved.total} / 10`);
-        const from = currentIndex;
-        await loadDashboard();
+        await loadEvent(openEventId);
         // Move on to the next team you haven't scored; when none are left, say so.
-        const next = nextUnscored(from);
-        if (next === -1) showAllDone();
-        else openTeam(next);
+        const next = nextUnscored();
+        if (next) showTeam(next);
+        else showAllDone();
+        safely(loadMe);
       } finally {
         submit.disabled = !live;
       }
@@ -269,22 +483,20 @@ function buildTeamCard(event, team, existing) {
 }
 
 function showAllDone() {
+  renderSteps();
   const box = $('current-team');
   const card = el('section', null, 'card done-card');
   const back = el('button', 'Review my scores', 'secondary');
   back.type = 'button';
-  back.addEventListener('click', () => openTeam(0));
+  back.addEventListener('click', () => showTeam(data.teams[0]._id));
   card.append(el('div', '🎉'), el('h2', 'All teams scored'), el('p', 'You can still change a score while the event is live.', 'muted'), back);
   box.replaceChildren(card);
 }
 
-// When the admin makes the event Live (or ends it), the live stream says so and the
-// page reloads by itself: rating unlocks or locks without pressing refresh.
-let statusSource = null;
+// ---------- Start ----------
 safely(async () => {
-  await loadDashboard();
-  statusSource = new EventSource(`/api/events/${data.event._id}/stream`);
-  statusSource.addEventListener('status', (msg) => {
-    if (JSON.parse(msg.data).status !== data.event.status) safely(loadDashboard);
-  });
+  await loadMe();
+  await route();
 });
+// Every 20s: check for new invitations (scoring updates arrive over the live stream).
+setInterval(() => safely(loadMe), 20000);

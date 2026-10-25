@@ -4,15 +4,15 @@
 
 const express = require('express');
 const { getDb } = require('../db');
-const { requireAdmin, assertEventAccess, requireJudge } = require('../middleware/auth');
+const { requireAdmin, assertEventAccess, requireJudge, findJudgeSeat } = require('../middleware/auth');
 const { httpError, parseId } = require('../middleware/validate');
 const { validateCriteria, calculateTotal } = require('../services/scoring');
 
 const router = express.Router();
 
-// Loads the judge's event and checks scoring is currently allowed.
-async function getLiveEventForJudge(judge) {
-  const event = await getDb().collection('events').findOne({ _id: judge.eventId });
+// Loads an event and checks scoring is currently allowed.
+async function getLiveEvent(eventId) {
+  const event = await getDb().collection('events').findOne({ _id: eventId });
   if (!event) throw httpError(404, 'Event not found');
   if (event.status !== 'live') {
     throw httpError(403, `Scoring is closed: this event is "${event.status}", not "live"`);
@@ -44,17 +44,18 @@ function buildScoreFields(event, body) {
 // POST /api/scores  { teamId, criteria, comment }
 router.post('/scores', requireJudge, async (req, res) => {
   const db = getDb();
-  const event = await getLiveEventForJudge(req.judge);
   const teamId = parseId((req.body || {}).teamId, 'teamId');
+  const team = await db.collection('teams').findOne({ _id: teamId }, { projection: { eventId: 1 } });
+  if (!team) throw httpError(404, 'Team not found');
 
-  // A judge can only score teams of THEIR OWN event.
-  const team = await db.collection('teams').findOne({ _id: teamId, eventId: event._id });
-  if (!team) throw httpError(404, 'Team not found in your event');
+  // A judge can only score teams of events they accepted (their seat in that event).
+  const seat = await findJudgeSeat(req, team.eventId);
+  const event = await getLiveEvent(team.eventId);
 
   const score = {
     eventId: event._id,
     teamId,
-    judgeId: req.judge._id,
+    judgeId: seat._id,
     ...buildScoreFields(event, req.body),
     submittedAt: new Date(),
   };
@@ -77,13 +78,16 @@ router.post('/scores', requireJudge, async (req, res) => {
 router.put('/scores/:id', requireJudge, async (req, res) => {
   const db = getDb();
   const scoreId = parseId(req.params.id, 'score id');
-  const event = await getLiveEventForJudge(req.judge);
+  const existing = await db.collection('scores').findOne({ _id: scoreId }, { projection: { eventId: 1 } });
+  if (!existing) throw httpError(404, 'Score not found (or it is not yours)');
+  const seat = await findJudgeSeat(req, existing.eventId);
+  const event = await getLiveEvent(existing.eventId);
 
   const fields = buildScoreFields(event, req.body);
 
   // The filter includes judgeId, so a judge can never edit someone else's score.
   const updated = await db.collection('scores').findOneAndUpdate(
-    { _id: scoreId, judgeId: req.judge._id, eventId: event._id },
+    { _id: scoreId, judgeId: seat._id, eventId: event._id },
     { $set: { ...fields, submittedAt: new Date() } },
     { returnDocument: 'after' }
   );

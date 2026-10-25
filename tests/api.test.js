@@ -40,6 +40,14 @@ async function joinEvent(name, members) {
   return { code: reg.body.team.code, token: reg.body.token };
 }
 
+// Registers a judge account, invites it to the test event by its judge code and accepts.
+async function addJudge(name) {
+  const reg = await api('POST', '/api/auth/judge-register', { body: { name, password: 'judge-password' } });
+  const invite = await api('POST', `/api/events/${eventId}/judges`, { token: adminToken, body: { code: reg.body.judge.code } });
+  await api('POST', `/api/judge/invitations/${invite.body._id}`, { token: reg.body.token, body: { accept: true } });
+  return { code: reg.body.judge.code, token: reg.body.token };
+}
+
 // Small helper: call our API and return { status, body }.
 async function api(method, path, { token, body } = {}) {
   const headers = { 'Content-Type': 'application/json' };
@@ -103,10 +111,9 @@ before(async () => {
   teamA = teams.find((t) => t.name === 'Team A')._id;
   teamB = teams.find((t) => t.name === 'Team B')._id;
 
-  const judge1 = await api('POST', `/api/events/${eventId}/judges`, { token: adminToken, body: { name: 'Judge 1' } });
-  const judge2 = await api('POST', `/api/events/${eventId}/judges`, { token: adminToken, body: { name: 'Judge 2' } });
-  judgeToken = (await api('POST', '/api/auth/judge-login', { body: { name: 'Judge 1', code: judge1.body.code } })).body.token;
-  judge2Token = (await api('POST', '/api/auth/judge-login', { body: { name: 'judge 2', code: judge2.body.code } })).body.token;
+  // Judges also register their own accounts, get invited by judge code, and accept.
+  judgeToken = (await addJudge('Judge 1')).token;
+  judge2Token = (await addJudge('Judge 2')).token;
 });
 
 after(async () => {
@@ -277,7 +284,7 @@ test('extra: a team shares its repo and slides, and its judges can open them', a
   assert.equal(await getDb().collection('slides.files').countDocuments({}), 1);
 
   // The judge sees the link and file name, and downloads the exact bytes.
-  const me = await api('GET', '/api/judge/me', { token: judgeToken });
+  const me = await api('GET', `/api/judge/events/${eventId}`, { token: judgeToken });
   const teamRow = me.body.teams.find((t) => t._id === teamA);
   assert.equal(teamRow.githubUrl, 'https://github.com/team-a/project');
   assert.equal(teamRow.slides.filename, 'Team A deck v2.pptx');
@@ -309,16 +316,16 @@ test('6. generate AI feedback for a team -> summary + sentiment saved (mock)', a
   assert.equal(saved.source, 'mock');
 });
 
-test('extra: ending the event expires every judge code', async () => {
-  // Test 6 closed the event, so the judges' codes and open sessions no longer work.
-  const judges = await getDb().collection('judges').find({ eventId: new ObjectId(eventId) }).toArray();
-  assert.ok(judges.every((j) => j.expiredAt instanceof Date));
-  assert.equal((await api('GET', '/api/judge/me', { token: judgeToken })).status, 401);
-
-  // A new code from the admin makes the judge usable again.
-  const reset = await api('POST', `/api/judges/${judges[0]._id}/reset-code`, { token: adminToken });
-  const login = await api('POST', '/api/auth/judge-login', { body: { name: judges[0].name, code: reset.body.code } });
-  assert.equal(login.status, 200);
+test('extra: after the event ends judges can look back but not score', async () => {
+  // Test 6 closed the event. The judge still sees it, but scoring is refused.
+  const me = await api('GET', '/api/judge/me', { token: judgeToken });
+  assert.equal(me.status, 200);
+  assert.equal(me.body.events.find((e) => e.eventId === eventId).status, 'closed');
+  const late = await api('POST', '/api/scores', {
+    token: judgeToken,
+    body: { teamId: teamB, criteria: { innovation: 5, design: 5, execution: 5 } },
+  });
+  assert.ok([403, 409].includes(late.status));
 });
 
 test('extra: submissions are locked once the event has ended', async () => {
@@ -326,20 +333,46 @@ test('extra: submissions are locked once the event has ended', async () => {
   assert.equal(res.status, 409);
 });
 
-test('extra: judge must give the right name with a chosen code', async () => {
-  const created = await api('POST', `/api/events/${eventId}/judges`, { token: adminToken, body: { name: 'Prof Mehta', code: 'panel-07' } });
-  assert.equal(created.status, 201);
-  assert.equal(created.body.code, 'PANEL-07');
+test('extra: judges join an event only by accepting an invitation', async () => {
+  const otherEvent = await api('POST', '/api/events', {
+    token: adminToken,
+    body: { name: 'Second Event', status: 'live', rubric: [{ key: 'idea', label: 'Idea', max: 10, weight: 1 }] },
+  });
+  const otherId = otherEvent.body._id;
+  const reg = await api('POST', '/api/auth/judge-register', { body: { name: 'Prof Mehta', password: 'judge-password' } });
+  assert.equal(reg.status, 201);
+  assert.match(reg.body.judge.code, /^JG[A-Z0-9]{6}$/);
+  const token = reg.body.token;
 
-  // Same code again -> refused by the unique codeHash index.
-  const clash = await api('POST', `/api/events/${eventId}/judges`, { token: adminToken, body: { name: 'Someone', code: 'PANEL-07' } });
-  assert.equal(clash.status, 409);
+  // Login is judge code + password.
+  assert.equal((await api('POST', '/api/auth/judge-login', { body: { code: reg.body.judge.code, password: 'nope-nope' } })).status, 401);
+  assert.equal((await api('POST', '/api/auth/judge-login', { body: { code: reg.body.judge.code.toLowerCase(), password: 'judge-password' } })).status, 200);
 
-  assert.equal((await api('POST', '/api/auth/judge-login', { body: { name: 'Wrong Name', code: 'PANEL-07' } })).status, 401);
-  const ok = await api('POST', '/api/auth/judge-login', { body: { name: 'prof mehta', code: 'panel-07' } });
-  assert.equal(ok.status, 200);
-  const me = await api('GET', '/api/judge/me', { token: ok.body.token });
-  assert.equal(me.body.event.name, 'Test Event');
+  // Unknown code -> 404. Invite -> pending, and inviting again is a duplicate.
+  assert.equal((await api('POST', `/api/events/${otherId}/judges`, { token: adminToken, body: { code: 'JG000000' } })).status, 404);
+  const invite = await api('POST', `/api/events/${otherId}/judges`, { token: adminToken, body: { code: reg.body.judge.code } });
+  assert.equal(invite.status, 201);
+  assert.equal((await api('POST', `/api/events/${otherId}/judges`, { token: adminToken, body: { code: reg.body.judge.code } })).status, 409);
+  assert.equal((await api('GET', `/api/events/${otherId}/judge-invitations`, { token: adminToken })).body.length, 1);
+
+  // Before accepting, the judge is not in the event and can't open it.
+  const before = await api('GET', '/api/judge/me', { token });
+  assert.equal(before.body.events.length, 0);
+  assert.equal(before.body.invitations[0].eventName, 'Second Event');
+  assert.equal((await api('GET', `/api/judge/events/${otherId}`, { token })).status, 403);
+
+  // Accept -> they are a judge in the event; answering twice is refused.
+  assert.equal((await api('POST', `/api/judge/invitations/${invite.body._id}`, { token, body: { accept: true } })).status, 200);
+  assert.equal((await api('POST', `/api/judge/invitations/${invite.body._id}`, { token, body: { accept: false } })).status, 409);
+  const after = await api('GET', '/api/judge/me', { token });
+  assert.deepEqual(after.body.events.map((e) => e.name), ['Second Event']);
+  const judges = (await api('GET', `/api/events/${otherId}/judges`, { token: adminToken })).body;
+  assert.equal(judges[0].code, reg.body.judge.code);
+
+  // Already a judge -> inviting again is refused. They can't score a team of another event.
+  assert.equal((await api('POST', `/api/events/${otherId}/judges`, { token: adminToken, body: { code: reg.body.judge.code } })).status, 409);
+  const wrongEvent = await api('POST', '/api/scores', { token, body: { teamId: teamA, criteria: { innovation: 5, design: 5, execution: 5 } } });
+  assert.equal(wrongEvent.status, 403);
 });
 
 test('extra: registered admins only see and manage their own events', async () => {

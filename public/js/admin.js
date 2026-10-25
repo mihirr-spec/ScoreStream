@@ -2,7 +2,7 @@
 //   #overview                   Dashboard: KPI cards + recent events
 //   #events                     every event, with status filters and search
 //   #event/<id>/teams           inside one event: teams + invitations
-//   #event/<id>/judges          judges, their codes and progress
+//   #event/<id>/judges          judges (invited by judge code) and their progress
 //   #event/<id>/rankings        live ranking, AI feedback, every score
 //   #event/<id>/settings        status, rubric, End Event, Delete
 // Every change goes through our JSON API.
@@ -26,7 +26,6 @@ let eventJudges = [];
 let eventScores = [];
 let liveSource = null;
 // Judge codes created in this session (shown once, so we keep them until the page closes).
-let recentCodes = [];
 
 // "Priya Chen" -> "PC"
 function initials(name) {
@@ -401,7 +400,6 @@ async function selectEvent(eventId) {
   const changed = !selectedEvent || selectedEvent._id !== eventId;
   selectedEvent = await adminApi('GET', `/api/events/${eventId}`);
   const ev = selectedEvent;
-  if (changed) recentCodes = [];
 
   // Heading, sidebar and tab links of this event.
   $('event-title').textContent = ev.name;
@@ -419,8 +417,8 @@ async function selectEvent(eventId) {
   $('end-event').disabled = closed;
   $('end-event').textContent = closed ? 'Event ended' : 'End Event';
   $('end-text').textContent = closed
-    ? 'This event has ended: scoring is closed and every judge code has expired. Setting it live again needs new judge codes (Judges page, "New code").'
-    : 'Closes scoring, publishes the final ranking, writes AI feedback for every team and expires every judge code.';
+    ? 'This event has ended: scoring is closed and the final ranking and AI feedback are published.'
+    : 'Closes scoring, publishes the final ranking and writes AI feedback for every team.';
   $('controls-text').textContent = {
     draft: 'Draft: judges cannot score yet. Go live when your teams and judges are ready.',
     live: 'Live: judges are scoring now. Use "End Event" below when judging is over.',
@@ -443,8 +441,7 @@ async function selectEvent(eventId) {
     : 'Written by AI for every team when you end the event.';
 
   if (changed) watchLeaderboard(ev._id);
-  renderCodes();
-  await Promise.all([loadTeams(), loadInvitations(), loadJudges(), loadRankings(), loadFeedback()]);
+  await Promise.all([loadTeams(), loadInvitations(), loadJudges(), loadJudgeInvitations(), loadRankings(), loadFeedback()]);
   await loadScores();
 }
 
@@ -466,14 +463,14 @@ $('end-event').addEventListener('click', () =>
   safely(async () => {
     const ok = await confirmModal(
       'End Event?',
-      'Scoring closes, the final ranking is published, AI feedback is written for every team, and every judge code of this event expires.',
+      'Scoring closes, the final ranking is published and AI feedback is written for every team. Judges can still look at their scores but not change them.',
       'Confirm End Event'
     );
     if (!ok) return;
     await adminApi('PATCH', `/api/events/${selectedEvent._id}`, { status: 'closed' });
     await loadEvents();
     await selectEvent(selectedEvent._id);
-    toast('Event ended - judge codes expired, writing AI feedback...');
+    toast('Event ended - writing AI feedback...');
     location.hash = eventUrl(selectedEvent._id, 'rankings');
     watchFeedback(selectedEvent._id);
   })
@@ -599,31 +596,51 @@ async function loadJudges() {
   $('judge-count').textContent = `${eventJudges.length} judge${eventJudges.length === 1 ? '' : 's'}`;
   const list = $('judge-list');
   list.replaceChildren();
-  if (eventJudges.length === 0) list.append(el('li', 'No judges yet. Add the first one.', 'empty-text'));
+  if (eventJudges.length === 0) list.append(el('li', 'No judges yet. Invite one with their judge code.', 'empty-text'));
   for (const judge of eventJudges) {
     const sub = el('span', null);
-    if (judge.expiredAt) sub.append(pill('code expired'));
-    else sub.append('Signs in with this name + code');
+    if (judge.code) sub.append(el('span', judge.code, 'code-chip'), '  ·  ');
+    sub.append(`joined ${new Date(judge.joinedAt).toLocaleDateString()}`);
     list.append(
       personRow(
         judge.name,
         sub,
-        rowButton('New code', async () => {
-          const ok = await confirmModal('New code?', `${judge.name}'s old code stops working and a new one is generated.`, 'Generate new code', false);
-          if (!ok) return;
-          const res = await adminApi('POST', `/api/judges/${judge._id}/reset-code`);
-          rememberCode(res.name, res.code);
-          await loadJudges();
-        }),
         rowButton(
-          'Delete',
+          'Remove',
           async () => {
-            const ok = await confirmModal('Delete judge?', `"${judge.name}" and all their scores will be deleted.`, 'Delete judge');
+            const ok = await confirmModal('Remove judge?', `"${judge.name}" leaves this event and their scores are deleted. Their judge account is kept.`, 'Remove judge');
             if (!ok) return;
             await adminApi('DELETE', `/api/judges/${judge._id}`);
-            toast('Judge deleted');
+            toast('Judge removed from the event');
             await Promise.all([loadJudges(), loadRankings()]);
             await refreshCounts();
+          },
+          true
+        )
+      )
+    );
+  }
+}
+
+async function loadJudgeInvitations() {
+  const invitations = await adminApi('GET', `/api/events/${selectedEvent._id}/judge-invitations`);
+  $('judge-invite-count').textContent = invitations.length;
+  const list = $('judge-invite-list');
+  list.replaceChildren();
+  if (invitations.length === 0) list.append(el('li', 'No invitations waiting.', 'empty-text'));
+  for (const inv of invitations) {
+    const sub = el('span', null);
+    sub.append(el('span', inv.code, 'code-chip'), `  ·  invited ${new Date(inv.createdAt).toLocaleDateString()}`);
+    list.append(
+      personRow(
+        inv.name,
+        sub,
+        rowButton(
+          'Withdraw',
+          async () => {
+            await adminApi('DELETE', `/api/judge-invitations/${inv._id}`);
+            toast('Invitation withdrawn');
+            await loadJudgeInvitations();
           },
           true
         )
@@ -635,62 +652,12 @@ async function loadJudges() {
 $('judge-form').addEventListener('submit', (e) => {
   e.preventDefault();
   safely(async () => {
-    const judge = await adminApi('POST', `/api/events/${selectedEvent._id}/judges`, { name: $('judge-name').value });
-    $('judge-name').value = '';
-    toast(`Judge "${judge.name}" added - copy their code now`);
-    rememberCode(judge.name, judge.code);
-    await loadJudges();
-    await refreshCounts();
+    const inv = await adminApi('POST', `/api/events/${selectedEvent._id}/judges`, { code: $('judge-code').value });
+    $('judge-code').value = '';
+    toast(`Invitation sent to ${inv.name}. They join once they accept.`);
+    await loadJudgeInvitations();
   });
 });
-
-function rememberCode(name, code) {
-  recentCodes.unshift({ name, code });
-  renderCodes();
-}
-
-function renderCodes() {
-  const box = $('code-list');
-  box.replaceChildren();
-  if (recentCodes.length === 0) {
-    box.append(el('p', 'A new code appears here when you add a judge or click New code.', 'empty-text'));
-    return;
-  }
-  for (const item of recentCodes) {
-    const row = el('div', null, 'access-row');
-    const who = el('div', null, 'access-who');
-    who.append(el('span', 'Judge name'), item.name);
-    const right = el('div', null, 'action-row');
-    right.style.alignItems = 'center';
-    const copy = el('button', 'Copy', 'tiny-button');
-    copy.type = 'button';
-    copy.addEventListener('click', () =>
-      safely(async () => {
-        await navigator.clipboard.writeText(item.code);
-        copy.textContent = 'Copied';
-        setTimeout(() => (copy.textContent = 'Copy'), 1800);
-      })
-    );
-    right.append(el('span', item.code, 'code'), copy);
-    row.append(who, right);
-    box.append(row);
-  }
-  const actions = el('div', null, 'action-row');
-  actions.style.marginTop = '14px';
-  const download = el('button', 'Download codes (.xlsx)', 'secondary');
-  download.type = 'button';
-  download.addEventListener('click', () =>
-    safely(() =>
-      downloadSheet(
-        recentCodes.map((c) => ({ Judge: c.name, Code: c.code })),
-        'Judge codes',
-        `${slug(selectedEvent.name)}-judge-codes.xlsx`
-      )
-    )
-  );
-  actions.append(download);
-  box.append(actions);
-}
 
 // ---------- Excel: invite by team codes, export teams ----------
 // SheetJS reads and writes .xlsx/.xls/.csv in the browser. It is only downloaded
@@ -817,6 +784,13 @@ function watchLeaderboard(eventId) {
     renderRankings(JSON.parse(msg.data));
     safely(refreshCounts);
   });
+  // A judge or team accepted an invitation: refresh the lists so the admin sees them join.
+  liveSource.addEventListener('roster', () =>
+    safely(async () => {
+      await Promise.all([loadTeams(), loadInvitations(), loadJudges(), loadJudgeInvitations()]);
+      await refreshCounts();
+    })
+  );
   liveSource.addEventListener('open', () => $('live-flag').classList.remove('hidden'));
   liveSource.addEventListener('error', () => $('live-flag').classList.add('hidden'));
 }
@@ -830,7 +804,7 @@ async function loadScores() {
   box.replaceChildren();
   if (eventJudges.length === 0) box.append(el('p', 'Add judges to track their progress.', 'empty-text'));
   for (const judge of eventJudges) {
-    const done = eventScores.filter((s) => s.judgeName === judge.name).length;
+    const done = eventScores.filter((s) => s.judgeId === judge._id).length;
     const row = el('div', null, 'score-row');
     const progress = el('span', null, 'score-status');
     const track = el('span', null, 'progress-track');

@@ -119,10 +119,10 @@ router.patch('/events/:id', requireAdmin, async (req, res) => {
   // Any status change also refreshes the ranking, so it can never stay out of date.
   if (changes.status) await recomputeLeaderboard(eventId);
   if (changes.status === 'closed') {
-    // Ending the event expires every judge code of this event (and ends their sessions).
-    await db.collection('judges').updateMany({ eventId, expiredAt: { $exists: false } }, { $set: { expiredAt: new Date() } });
-    // Invitations nobody answered can't be accepted any more.
+    // Invitations nobody answered can't be accepted any more. (Judges keep their
+    // seat, so they can still look back at their scores - scoring itself is closed.)
     await db.collection('invitations').deleteMany({ eventId, status: 'pending' });
+    await db.collection('judgeInvitations').deleteMany({ eventId, status: 'pending' });
     generateEventFeedback(eventId).catch((err) => console.error(`[feedback] event ${eventId}: ${err.message}`));
   }
   // Tell open team and judge pages straight away, so nobody has to refresh.
@@ -140,7 +140,7 @@ router.delete('/events/:id', requireAdmin, async (req, res) => {
   const result = await db.collection('events').deleteOne({ _id: eventId });
   if (result.deletedCount === 0) throw httpError(404, 'Event not found');
 
-  for (const name of ['teams', 'judges', 'scores', 'leaderboard', 'feedback', 'invitations']) {
+  for (const name of ['teams', 'judges', 'scores', 'leaderboard', 'feedback', 'invitations', 'judgeInvitations']) {
     await db.collection(name).deleteMany({ eventId });
   }
   await deleteSubmissions({ eventId }); // also deletes the slide files from GridFS

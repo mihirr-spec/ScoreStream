@@ -9,6 +9,7 @@
 const express = require('express');
 const config = require('../config');
 const { getDb } = require('../db');
+const sse = require('../services/sse');
 const { requireAdmin, assertEventAccess, requireTeam } = require('../middleware/auth');
 const { httpError, parseId, isNonEmptyString } = require('../middleware/validate');
 
@@ -151,6 +152,8 @@ router.post('/team/invitations/:id', requireTeam, async (req, res) => {
   await db
     .collection('invitations')
     .updateOne({ _id: id, status: 'pending' }, { $set: { status: accept ? 'accepted' : 'declined', respondedAt: new Date() } });
+  // The admin's open event page updates its team list straight away.
+  sse.broadcast(event._id.toString(), 'roster', { kind: 'team' });
   res.json({ message: accept ? `You joined ${event.name}` : `You declined ${event.name}`, event: { _id: event._id, name: event.name } });
 });
 
