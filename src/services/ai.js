@@ -77,7 +77,10 @@ async function callModel(provider, teamName, comments, scoreSummary) {
         { role: 'system', content: SYSTEM_PROMPT },
         {
           role: 'user',
-          content: `Team: ${teamName}\nJudges' comments:\n${comments.map((c, i) => `${i + 1}. ${c}`).join('\n')}`,
+          content:
+            `Team: ${teamName}\n` +
+            (scoreSummary ? `Scores: ${scoreSummary}\n` : '') +
+            `Judges' comments:\n${comments.map((c, i) => `${i + 1}. ${c}`).join('\n')}`,
         },
       ],
     }),
@@ -85,7 +88,10 @@ async function callModel(provider, teamName, comments, scoreSummary) {
   });
 
   if (!response.ok) {
-    throw new Error(`AI request failed with HTTP ${response.status}`);
+    // Include the provider's own explanation (e.g. "model not found", "invalid API key")
+    // so the server log says WHY it failed.
+    const detail = (await response.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 200);
+    throw new Error(`AI request failed with HTTP ${response.status}: ${detail}`);
   }
   const data = await response.json();
   const content = data.choices?.[0]?.message?.content;
