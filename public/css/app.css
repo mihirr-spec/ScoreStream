@@ -351,3 +351,9 @@ input[type="range"] { width: 100%; accent-color: var(--blue); margin: 0; }
   .rubric-head { display: none; }
   .score-grid { grid-template-columns: 1fr; }
 }
+
+/* Slides upload in progress: show it, and stop a second file being picked meanwhile. */
+label.busy {
+  pointer-events: none;
+  opacity: 0.75;
+}

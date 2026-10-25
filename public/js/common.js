@@ -94,16 +94,29 @@ async function api(method, path, body, role) {
 }
 
 // Uploads a file as the raw request body (used for team slides).
-async function uploadFile(path, file, role) {
-  const res = await fetch(path, {
-    method: 'PUT',
-    headers: { Authorization: `Bearer ${auth.get(role)}`, 'Content-Type': 'application/octet-stream' },
-    body: file,
+// Uses XMLHttpRequest rather than fetch because only XHR reports upload progress:
+// onProgress(percent) is called as the file is sent, so slow uploads don't look stuck.
+function uploadFile(path, file, role, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', path);
+    xhr.setRequestHeader('Authorization', `Bearer ${auth.get(role)}`);
+    xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+    xhr.upload.addEventListener('progress', (e) => {
+      if (onProgress && e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+    });
+    xhr.addEventListener('load', () => {
+      let data = {};
+      try {
+        data = JSON.parse(xhr.responseText);
+      } catch {}
+      if (xhr.status === 401) logout(role);
+      if (xhr.status >= 200 && xhr.status < 300) resolve(data);
+      else reject(new Error(data.error || 'Upload failed'));
+    });
+    xhr.addEventListener('error', () => reject(new Error('Upload failed - check your connection and try again')));
+    xhr.send(file);
   });
-  const data = await res.json().catch(() => ({}));
-  if (res.status === 401) logout(role);
-  if (!res.ok) throw new Error(data.error || 'Upload failed');
-  return data;
 }
 
 // Downloads a protected file (it needs the login token, so a plain link won't do).

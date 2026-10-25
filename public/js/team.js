@@ -9,6 +9,7 @@ requireLogin('team');
 let me = null; // { team, events, invitations } from /api/team/me
 let liveSource = null;
 let openEventId = null;
+let uploading = false; // true while slides are being sent
 const shownPopups = new Set(); // invitations already shown in the pop-up this visit
 
 if (new URLSearchParams(location.search).get('welcome') === '1') $('welcome-banner').classList.remove('hidden');
@@ -303,6 +304,8 @@ function showSubmission(event, submission) {
     current.append('Judges see: ', link);
   } else current.append('No repository shared yet.');
 
+  // While a file is being sent, live refreshes leave the upload status alone.
+  if (uploading) return;
   const slides = submission.slides;
   $('slides-current').textContent = slides
     ? `${slides.filename}  ·  ${fileSize(slides.size)}  ·  uploaded ${new Date(slides.uploadedAt).toLocaleString()}`
@@ -329,11 +332,19 @@ $('slides-file').addEventListener('change', (e) =>
     if (!file) return;
     if (file.size > 20 * 1024 * 1024) throw new Error('Slides must be 20 MB or smaller');
     const label = $('slides-upload-label');
-    label.textContent = 'Uploading...';
+    uploading = true;
+    label.textContent = 'Uploading 0%';
+    label.classList.add('busy');
+    $('slides-current').textContent = `Sending ${file.name} (${fileSize(file.size)})...`;
     try {
-      await uploadFile(`/api/team/events/${openEventId}/slides?name=${encodeURIComponent(file.name)}`, file, 'team');
+      await uploadFile(`/api/team/events/${openEventId}/slides?name=${encodeURIComponent(file.name)}`, file, 'team', (percent) => {
+        // 100% sent = the server is still saving it into MongoDB.
+        label.textContent = percent < 100 ? `Uploading ${percent}%` : 'Saving...';
+      });
       toast('Slides uploaded - judges can open them now');
     } finally {
+      uploading = false;
+      label.classList.remove('busy');
       await loadEvent(openEventId);
     }
   })
