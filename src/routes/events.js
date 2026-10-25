@@ -5,6 +5,7 @@ const { getDb } = require('../db');
 const { requireAdmin, assertEventAccess } = require('../middleware/auth');
 const { recomputeLeaderboard } = require('../services/leaderboard');
 const { generateEventFeedback } = require('../services/feedback');
+const sse = require('../services/sse');
 const { deleteSubmissions } = require('./submissions');
 const {
   httpError,
@@ -124,6 +125,8 @@ router.patch('/events/:id', requireAdmin, async (req, res) => {
     await db.collection('invitations').deleteMany({ eventId, status: 'pending' });
     generateEventFeedback(eventId).catch((err) => console.error(`[feedback] event ${eventId}: ${err.message}`));
   }
+  // Tell open team and judge pages straight away, so nobody has to refresh.
+  if (changes.status) sse.broadcast(eventId.toString(), 'status', { status: changes.status });
   res.json(updated);
 });
 

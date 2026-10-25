@@ -278,4 +278,13 @@ function showAllDone() {
   box.replaceChildren(card);
 }
 
-safely(loadDashboard);
+// When the admin makes the event Live (or ends it), the live stream says so and the
+// page reloads by itself: rating unlocks or locks without pressing refresh.
+let statusSource = null;
+safely(async () => {
+  await loadDashboard();
+  statusSource = new EventSource(`/api/events/${data.event._id}/stream`);
+  statusSource.addEventListener('status', (msg) => {
+    if (JSON.parse(msg.data).status !== data.event.status) safely(loadDashboard);
+  });
+});

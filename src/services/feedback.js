@@ -4,6 +4,7 @@
 
 const { getDb } = require('../db');
 const { generateTeamFeedback, usingRealAi } = require('./ai');
+const sse = require('./sse');
 
 // Free OpenRouter models allow ~20 requests/minute, so wait between teams.
 const PAUSE_BETWEEN_TEAMS_MS = 3500;
@@ -59,6 +60,8 @@ async function runForEvent(eventId) {
     await db
       .collection('feedback')
       .replaceOne({ eventId, teamId: team._id }, feedback, { upsert: true });
+    // The team's open page shows its feedback the moment it is saved.
+    sse.broadcast(eventId.toString(), 'feedback', { teamId: team._id.toString() });
     results.push({ teamName: team.name, ...feedback });
   }
 

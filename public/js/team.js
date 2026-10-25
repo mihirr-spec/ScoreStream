@@ -289,7 +289,8 @@ function showSubmission(event, submission) {
     ? 'The event has ended, so your submission is locked. Judges can still open it.'
     : 'Share your GitHub repo and slides with the judges. You can change them until the event ends.';
 
-  $('repo-url').value = submission.githubUrl;
+  // Live refreshes must not wipe a link the team is still typing.
+  if (document.activeElement !== $('repo-url')) $('repo-url').value = submission.githubUrl;
   $('repo-url').disabled = locked;
   $('repo-save').disabled = locked;
   const current = $('repo-current');
@@ -347,6 +348,15 @@ $('slides-remove').addEventListener('click', () =>
   })
 );
 
+// Several live messages can arrive together; reload the open event once for all of them.
+let reloadTimer = null;
+function reloadSoon() {
+  clearTimeout(reloadTimer);
+  reloadTimer = setTimeout(() => {
+    if (openEventId) safely(() => loadEvent(openEventId));
+  }, 400);
+}
+
 function stopLive() {
   if (liveSource) liveSource.close();
   liveSource = null;
@@ -368,7 +378,9 @@ async function loadEvent(eventId) {
   showFeedback(data.event, data.feedback);
   showSubmission(data.event, data.submission);
 
-  // Listen to the event's public leaderboard stream and pick out our own row.
+  // Listen to the event's live stream. The rank updates straight from the message;
+  // a new score, a status change (e.g. End Event) or our AI feedback being ready
+  // reloads the whole page section so judges' scores and feedback appear without a refresh.
   if (openEventId !== eventId) {
     stopLive();
     openEventId = eventId;
@@ -377,6 +389,11 @@ async function loadEvent(eventId) {
       const rows = JSON.parse(msg.data);
       const mine = rows.find((r) => r.teamId === data.team._id);
       showStanding(mine || null, data.totalTeams);
+      reloadSoon();
+    });
+    liveSource.addEventListener('status', reloadSoon);
+    liveSource.addEventListener('feedback', (msg) => {
+      if (JSON.parse(msg.data).teamId === data.team._id) reloadSoon();
     });
     liveSource.addEventListener('open', () => $('live-flag').classList.remove('hidden'));
     liveSource.addEventListener('error', () => $('live-flag').classList.add('hidden'));
@@ -387,12 +404,13 @@ safely(async () => {
   await loadMe();
   await route();
 });
-// Every 30s: check for new invitations and refresh the open event (rank also updates live).
+// Every 15s: check for new invitations and refresh the open event. This is only a
+// safety net - scores, End Event and feedback arrive instantly over the live stream.
 setInterval(
   () =>
     safely(async () => {
       await loadMe();
       if (openEventId) await loadEvent(openEventId);
     }),
-  30000
+  15000
 );
