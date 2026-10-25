@@ -5,7 +5,7 @@
 // It is created the first time someone uses a demo account.
 
 const { getDb } = require('../db');
-const { sha256, generateCode } = require('../middleware/auth');
+const { sha256, generateCode, generateTeamCode, hashPassword } = require('../middleware/auth');
 const { calculateTotal } = require('./scoring');
 const { recomputeLeaderboard } = require('./leaderboard');
 
@@ -32,11 +32,13 @@ async function createDemoEvent() {
     demo: true,
   });
 
-  // Demo accounts log in with a button, not a code, but the validator still requires a
-  // codeHash, so each gets a random code that nobody knows.
+  // Demo accounts log in with a button, so each one gets a random password nobody knows.
   const teams = await db.collection('teams').insertMany(
-    DEMO_TEAMS.map((t) => ({ eventId, name: t.name, members: t.members, codeHash: sha256(generateCode()) }))
+    DEMO_TEAMS.map((t) => ({ eventId, name: t.name, members: t.members, joinedAt: new Date() }))
   );
+  for (const teamId of Object.values(teams.insertedIds)) {
+    await ensureTeamAccount(await db.collection('teams').findOne({ _id: teamId }));
+  }
   const judges = await db.collection('judges').insertMany([
     { eventId, name: 'Demo Judge', codeHash: sha256(generateCode()) },
     { eventId, name: 'Guest Judge', codeHash: sha256(generateCode()) },
@@ -62,6 +64,29 @@ async function createDemoEvent() {
   return eventId;
 }
 
+// Makes sure a team in an event has a team account (demo teams, and teams created
+// before team accounts existed). Returns the account id.
+async function ensureTeamAccount(team) {
+  if (team.accountId) return team.accountId;
+  const db = getDb();
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const { insertedId } = await db.collection('teamAccounts').insertOne({
+        name: team.name,
+        members: team.members,
+        code: generateTeamCode(),
+        passwordHash: hashPassword(generateCode() + generateCode()),
+        createdAt: new Date(),
+        demo: true,
+      });
+      await db.collection('teams').updateOne({ _id: team._id }, { $set: { accountId: insertedId } });
+      return insertedId;
+    } catch (err) {
+      if (err.code !== 11000 || attempt >= 5) throw err;
+    }
+  }
+}
+
 // Returns the demo event, creating it if it does not exist yet.
 async function ensureDemoEvent() {
   const db = getDb();
@@ -83,11 +108,12 @@ async function resetDemoEvent() {
   const old = await db.collection('events').findOne({ demo: true });
   if (old) {
     await db.collection('events').deleteOne({ _id: old._id });
-    for (const name of ['teams', 'judges', 'scores', 'leaderboard', 'feedback']) {
+    for (const name of ['teams', 'judges', 'scores', 'leaderboard', 'feedback', 'invitations']) {
       await db.collection(name).deleteMany({ eventId: old._id });
     }
+    await db.collection('teamAccounts').deleteMany({ demo: true });
   }
   return ensureDemoEvent();
 }
 
-module.exports = { ensureDemoEvent, resetDemoEvent };
+module.exports = { ensureDemoEvent, resetDemoEvent, ensureTeamAccount };

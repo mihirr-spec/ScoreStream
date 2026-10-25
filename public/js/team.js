@@ -1,21 +1,202 @@
-// Team page: your live rank, average score, marks per criterion, every judge's
-// own score, and (after the event closes) your AI feedback.
+// Team dashboard. A team signs in to its ACCOUNT, which can be in many events.
+//   #overview       team code, events joined, best rank, your events
+//   #invitations    organisers asking to add your team to their event
+//   #event/<id>     your results in one event: rank, judges' scores, AI feedback
+// New invitations also pop up as soon as the dashboard opens.
 
 requireLogin('team');
 
-// Three pages in the sidebar: #overview, #scores (every judge's marks) and #feedback.
-setupViews(
-  {
-    overview: { crumb: 'Overview' },
-    scores: { crumb: "Judges' scores" },
-    feedback: { crumb: 'AI feedback' },
-  },
-  'overview'
+let me = null; // { team, events, invitations } from /api/team/me
+let liveSource = null;
+let openEventId = null;
+const shownPopups = new Set(); // invitations already shown in the pop-up this visit
+
+if (new URLSearchParams(location.search).get('welcome') === '1') $('welcome-banner').classList.remove('hidden');
+
+function pill(status) {
+  return el('span', status, `pill ${status}`);
+}
+
+function setCrumbs(items) {
+  const box = $('crumbs');
+  box.replaceChildren();
+  items.forEach((item, i) => {
+    if (i > 0) box.append(el('span', '/', 'muted'));
+    if (i === items.length - 1) box.append(el('strong', item.label));
+    else if (item.href) {
+      const link = el('a', item.label);
+      link.href = item.href;
+      box.append(link);
+    } else box.append(el('span', item.label, 'muted'));
+  });
+}
+
+// ---------- Router ----------
+function parseRoute() {
+  const [view, id] = location.hash.slice(1).split('/');
+  if (view === 'event' && /^[a-f0-9]{24}$/i.test(id || '')) return { view: 'event', eventId: id };
+  return { view: view === 'invitations' ? 'invitations' : 'overview', eventId: null };
+}
+
+async function route() {
+  const { view, eventId } = parseRoute();
+  for (const section of document.querySelectorAll('[data-view]')) section.classList.toggle('hidden', section.dataset.view !== view);
+  for (const link of document.querySelectorAll('.nav-item[data-nav]')) {
+    const active = link.dataset.nav === (view === 'event' ? `event-${eventId}` : view);
+    link.classList.toggle('active', active);
+    if (active) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
+  }
+  if (view === 'overview') setCrumbs([{ label: 'My team' }, { label: 'Dashboard' }]);
+  if (view === 'invitations') setCrumbs([{ label: 'My team' }, { label: 'Invitations' }]);
+  if (view !== 'event') stopLive();
+  else await loadEvent(eventId);
+  window.scrollTo(0, 0);
+}
+window.addEventListener('hashchange', () => safely(route));
+
+// ---------- Account, events and invitations ----------
+async function loadMe() {
+  me = await api('GET', '/api/team/me', undefined, 'team');
+  const { team, events, invitations } = me;
+
+  setupUserBar('team', team.name);
+  setupShell(team.name);
+  $('demo-banner').classList.toggle('hidden', !team.demo);
+  $('team-name').textContent = team.name;
+  $('team-members').textContent = team.members.length ? `Members: ${team.members.join(', ')}` : 'No members listed';
+  $('team-code').textContent = team.code;
+
+  const ranks = events.map((e) => e.rank).filter(Boolean);
+  $('kpi-events').textContent = events.length;
+  $('kpi-best').textContent = ranks.length ? `#${Math.min(...ranks)}` : '-';
+  $('kpi-invites').textContent = invitations.length;
+  $('invite-badge').textContent = invitations.length;
+  $('invite-badge').classList.toggle('hidden', invitations.length === 0);
+
+  // "Your events" table.
+  const rows = $('event-rows');
+  rows.replaceChildren();
+  for (const e of events) {
+    const row = el('tr');
+    const name = el('td', null, 'event-name');
+    const link = el('a', e.name);
+    link.href = `#event/${e.eventId}`;
+    link.style.textDecoration = 'none';
+    name.append(link);
+    const status = el('td');
+    status.append(pill(e.status));
+    const open = el('a', 'View results', 'row-action');
+    open.href = `#event/${e.eventId}`;
+    const actions = el('td');
+    actions.append(open);
+    const avg = typeof e.avgScore === 'number' ? e.avgScore.toFixed(2) : '-';
+    row.append(name, status, el('td', e.rank ? `#${e.rank}` : '-'), el('td', avg), actions);
+    rows.append(row);
+  }
+  $('no-events').classList.toggle('hidden', events.length > 0);
+
+  // Sidebar: one link per event.
+  const nav = $('events-nav-list');
+  nav.replaceChildren();
+  if (events.length === 0) nav.append(el('p', 'No events yet', 'nav-label'));
+  for (const e of events) {
+    const link = el('a', null, 'nav-item');
+    link.href = `#event/${e.eventId}`;
+    link.dataset.nav = `event-${e.eventId}`;
+    link.append(el('span', e.name, 'step-name'), pill(e.status));
+    nav.append(link);
+  }
+
+  renderInvitations();
+  // Pop up every invitation we have not shown yet in this visit.
+  const fresh = invitations.filter((inv) => !shownPopups.has(inv._id));
+  if (fresh.length && $('invite-modal').classList.contains('hidden')) showPopup(fresh[0]);
+}
+
+async function answer(inv, accept) {
+  const res = await api('POST', `/api/team/invitations/${inv._id}`, { accept }, 'team');
+  toast(res.message);
+  await loadMe();
+  if (accept) location.hash = `#event/${inv.eventId}`;
+  else await route();
+}
+
+// The Invitations page: one row per pending invitation.
+function renderInvitations() {
+  const box = $('invite-list');
+  box.replaceChildren();
+  if (me.invitations.length === 0) {
+    box.append(el('p', 'No invitations right now. Give your team code to an organiser and their invitation appears here.', 'empty-text'));
+    return;
+  }
+  for (const inv of me.invitations) {
+    const row = el('div', null, 'access-row');
+    const who = el('div', null, 'access-who');
+    who.append(el('span', `From ${inv.invitedBy}  ·  ${new Date(inv.createdAt).toLocaleDateString()}`), inv.eventName);
+    const actions = el('div', null, 'action-row');
+    const decline = el('button', 'Decline', 'danger-button');
+    decline.type = 'button';
+    decline.addEventListener('click', () => safely(() => answer(inv, false)));
+    const accept = el('button', 'Accept & join', 'primary');
+    accept.type = 'button';
+    accept.addEventListener('click', () => safely(() => answer(inv, true)));
+    actions.append(decline, accept);
+    row.append(who, actions);
+    box.append(row);
+  }
+}
+
+// ---------- Invitation pop-up ----------
+let popupInvite = null;
+function showPopup(inv) {
+  popupInvite = inv;
+  shownPopups.add(inv._id);
+  const index = me.invitations.findIndex((i) => i._id === inv._id);
+  $('invite-step').textContent = me.invitations.length > 1 ? `${index + 1} of ${me.invitations.length}` : '';
+  $('invite-title').textContent = `Join "${inv.eventName}"?`;
+  $('invite-text').textContent =
+    `${inv.invitedBy} wants to add ${me.team.name} to the event "${inv.eventName}". ` +
+    'Your team only joins if you accept. The event’s judges will then score your team.';
+  $('invite-modal').classList.remove('hidden');
+  $('invite-accept').focus();
+}
+function closePopup() {
+  $('invite-modal').classList.add('hidden');
+  popupInvite = null;
+}
+function nextPopup() {
+  closePopup();
+  const next = me.invitations.find((inv) => !shownPopups.has(inv._id));
+  if (next) showPopup(next);
+}
+$('invite-later').addEventListener('click', nextPopup);
+$('invite-accept').addEventListener('click', () =>
+  safely(async () => {
+    const inv = popupInvite;
+    closePopup();
+    await answer(inv, true);
+  })
+);
+$('invite-decline').addEventListener('click', () =>
+  safely(async () => {
+    const inv = popupInvite;
+    closePopup();
+    await answer(inv, false);
+  })
+);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !$('invite-modal').classList.contains('hidden')) nextPopup();
+});
+
+$('copy-code').addEventListener('click', () =>
+  safely(async () => {
+    await navigator.clipboard.writeText(me.team.code);
+    toast('Team code copied');
+  })
 );
 
-let teamId = null;
-let liveSource = null;
-
+// ---------- One event ----------
 // Fills the rank, average and judges KPI cards.
 function showStanding(standing, totalTeams) {
   if (!standing) {
@@ -102,18 +283,20 @@ function showFeedback(event, feedback) {
   box.append(cols);
 }
 
-async function load() {
-  const data = await api('GET', '/api/team/me', undefined, 'team');
-  teamId = data.team._id;
+function stopLive() {
+  if (liveSource) liveSource.close();
+  liveSource = null;
+  openEventId = null;
+  $('live-flag').classList.add('hidden');
+}
 
-  setupUserBar('team', data.team.name);
-  setupShell(data.team.name);
-  $('team-name').textContent = data.team.name;
+async function loadEvent(eventId) {
+  const data = await api('GET', `/api/team/events/${eventId}`, undefined, 'team');
+  setCrumbs([{ label: 'My team', href: '#overview' }, { label: data.event.name }]);
   $('event-name').textContent = data.event.name;
-  $('event-status').replaceChildren(el('span', data.event.status, `pill ${data.event.status}`));
-  $('members').textContent = data.team.members.length ? `·  ${data.team.members.join(', ')}` : '';
+  $('event-status').replaceChildren(pill(data.event.status));
+  $('event-team').textContent = `${data.team.name}${data.team.members.length ? `  ·  ${data.team.members.join(', ')}` : ''}`;
   $('leaderboard-link').href = `leaderboard.html?event=${data.event._id}`;
-  $('demo-banner').classList.toggle('hidden', !data.event.demo);
 
   showStanding(data.standing, data.totalTeams);
   showBreakdown(data.breakdown);
@@ -121,11 +304,13 @@ async function load() {
   showFeedback(data.event, data.feedback);
 
   // Listen to the event's public leaderboard stream and pick out our own row.
-  if (!liveSource) {
-    liveSource = new EventSource(`/api/events/${data.event._id}/stream`);
+  if (openEventId !== eventId) {
+    stopLive();
+    openEventId = eventId;
+    liveSource = new EventSource(`/api/events/${eventId}/stream`);
     liveSource.addEventListener('leaderboard', (msg) => {
       const rows = JSON.parse(msg.data);
-      const mine = rows.find((r) => r.teamId === teamId);
+      const mine = rows.find((r) => r.teamId === data.team._id);
       showStanding(mine || null, data.totalTeams);
     });
     liveSource.addEventListener('open', () => $('live-flag').classList.remove('hidden'));
@@ -133,6 +318,16 @@ async function load() {
   }
 }
 
-safely(load);
-// Refresh the criterion breakdown every 30s (rank/average already update live).
-setInterval(() => safely(load), 30000);
+safely(async () => {
+  await loadMe();
+  await route();
+});
+// Every 30s: check for new invitations and refresh the open event (rank also updates live).
+setInterval(
+  () =>
+    safely(async () => {
+      await loadMe();
+      if (openEventId) await loadEvent(openEventId);
+    }),
+  30000
+);

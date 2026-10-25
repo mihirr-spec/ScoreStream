@@ -1,14 +1,14 @@
-// Login routes: admins register and log in with a username + password, judges with
-// their name + access code, teams with an access code, and anyone can open a
-// one-click demo account.
+// Login routes: admins and teams register and log in with a password (teams use their
+// permanent team code as the "username"), judges with their name + access code,
+// and anyone can open a one-click demo account.
 
 const crypto = require('crypto');
 const express = require('express');
 const config = require('../config');
 const { getDb } = require('../db');
-const { signToken, sha256, hashPassword, checkPassword } = require('../middleware/auth');
-const { ensureDemoEvent } = require('../services/demo');
-const { httpError, isNonEmptyString, isValidUsername } = require('../middleware/validate');
+const { signToken, sha256, hashPassword, checkPassword, generateTeamCode } = require('../middleware/auth');
+const { ensureDemoEvent, ensureTeamAccount } = require('../services/demo');
+const { httpError, isNonEmptyString, isValidUsername, cleanMembers } = require('../middleware/validate');
 
 const router = express.Router();
 
@@ -107,6 +107,9 @@ router.post('/auth/judge-login', async (req, res) => {
   if (!judge || judge.name.trim().toLowerCase() !== name.trim().toLowerCase()) {
     throw httpError(401, 'Wrong judge name or code');
   }
+  if (judge.expiredAt) {
+    throw httpError(401, 'This event has ended, so this judge code has expired');
+  }
 
   const event = await db.collection('events').findOne({ _id: judge.eventId });
   if (!event) {
@@ -121,27 +124,53 @@ router.post('/auth/judge-login', async (req, res) => {
   res.json({ token, judge: { name: judge.name }, event: { _id: event._id, name: event.name } });
 });
 
-// POST /api/auth/team-login  { code }
-// Works exactly like judge login, but looks in the teams collection.
+// POST /api/auth/team-register  { name, members, password }
+// A team creates its own account and gets a permanent team code. Admins use that
+// code to INVITE the team to an event; the team then accepts or declines.
+router.post('/auth/team-register', async (req, res) => {
+  const { name, members, password } = req.body || {};
+  if (!isNonEmptyString(name, 100)) throw httpError(400, 'team name is required (max 100 characters)');
+  const cleanedMembers = cleanMembers(members);
+  if (cleanedMembers === null) throw httpError(400, 'members must be a list of up to 20 names');
+  if (typeof password !== 'string' || password.length < 8 || password.length > 200) {
+    throw httpError(400, 'password must be at least 8 characters');
+  }
+
+  const account = {
+    name: name.trim(),
+    members: cleanedMembers,
+    code: generateTeamCode(),
+    passwordHash: hashPassword(password),
+    createdAt: new Date(),
+  };
+  const accounts = getDb().collection('teamAccounts');
+  // The unique code index makes a clash impossible; on the (very rare) clash, try a new code.
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const result = await accounts.insertOne(account);
+      const token = signToken({ role: 'team', accountId: result.insertedId.toString() });
+      return res.status(201).json({ token, team: { _id: result.insertedId, name: account.name, code: account.code } });
+    } catch (err) {
+      if (err.code !== 11000 || attempt >= 5) throw err;
+      account.code = generateTeamCode();
+      delete account._id;
+    }
+  }
+});
+
+// POST /api/auth/team-login  { code, password }
 router.post('/auth/team-login', async (req, res) => {
-  const { code } = req.body || {};
-  if (!isNonEmptyString(code, 50)) {
-    throw httpError(400, 'code is required');
-  }
+  const { code, password } = req.body || {};
+  if (!isNonEmptyString(code, 50)) throw httpError(400, 'team code is required');
+  if (typeof password !== 'string' || password.length === 0) throw httpError(400, 'password is required');
 
-  const db = getDb();
-  const team = await db.collection('teams').findOne({ codeHash: sha256(code.trim().toUpperCase()) });
-  if (!team) {
-    throw httpError(401, 'Invalid team code');
+  const account = await getDb().collection('teamAccounts').findOne({ code: code.trim().toUpperCase() });
+  // Same message for an unknown code or a wrong password.
+  if (!account || !checkPassword(password, account.passwordHash)) {
+    throw httpError(401, 'Wrong team code or password');
   }
-
-  const event = await db.collection('events').findOne({ _id: team.eventId });
-  if (!event) {
-    throw httpError(401, 'This team\'s event no longer exists');
-  }
-
-  const token = signToken({ role: 'team', teamId: team._id.toString(), eventId: team.eventId.toString() });
-  res.json({ token, team: { name: team.name }, event: { _id: event._id, name: event.name } });
+  const token = signToken({ role: 'team', accountId: account._id.toString() });
+  res.json({ token, team: { _id: account._id, name: account.name, code: account.code } });
 });
 
 // POST /api/auth/demo-login  { role: 'admin' | 'judge' | 'team' }
@@ -173,11 +202,12 @@ router.post('/auth/demo-login', async (req, res) => {
     });
   }
 
-  // role === 'team': the first demo team alphabetically (Team Nova).
+  // role === 'team': the account of the first demo team alphabetically (Team Nova).
   const team = await db.collection('teams').find({ eventId: event._id }).sort({ name: 1 }).limit(1).next();
   if (!team) throw httpError(404, 'The demo teams were removed. Ask the admin to reset the demo.');
+  const accountId = await ensureTeamAccount(team);
   return res.json({
-    token: signToken({ role: 'team', teamId: team._id.toString(), eventId }),
+    token: signToken({ role: 'team', accountId: accountId.toString(), demo: true }),
     demo: true,
     team: { name: team.name },
     event: { _id: event._id, name: event.name },

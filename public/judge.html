@@ -12,7 +12,7 @@
     try { if (localStorage.getItem('theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch (e) {}
   </script>
   <link rel="icon" type="image/png" href="img/favicon.png">
-  <link rel="stylesheet" href="css/app.css?v=14">
+  <link rel="stylesheet" href="css/app.css?v=15">
 </head>
 <body>
   <aside class="sidebar" aria-label="Primary sidebar">
@@ -108,27 +108,22 @@
     </div>
 
     <div data-view="score" class="hidden">
-    <section id="teams-section" class="card section-card">
-      <div class="section-head">
-        <div>
-          <h2>Score teams</h2>
-          <p class="section-sub">Click the stars for a quick rating, or drag the slider to fine-tune. Your comment feeds the AI feedback.</p>
-        </div>
+      <div class="judge-layout">
+        <aside class="card section-card team-steps">
+          <div class="section-head">
+            <div>
+              <h3>Teams</h3>
+              <p class="section-sub" id="steps-note"></p>
+            </div>
+          </div>
+          <ol id="team-steps" class="step-list"></ol>
+        </aside>
+        <div id="current-team"></div>
       </div>
-      <div class="table-tools">
-        <div class="tabs" role="tablist" aria-label="Filter teams">
-          <button type="button" role="tab" aria-selected="true" class="tab active" data-filter="all">All</button>
-          <button type="button" role="tab" aria-selected="false" class="tab" data-filter="todo">To score</button>
-          <button type="button" role="tab" aria-selected="false" class="tab" data-filter="done">Scored</button>
-        </div>
-      </div>
-      <div class="score-grid" id="team-cards"></div>
-      <p id="no-teams" class="empty-row hidden"></p>
-    </section>
     </div>
   </main>
 
-  <script src="js/common.js?v=14"></script>
-  <script src="js/judge.js?v=14"></script>
+  <script src="js/common.js?v=15"></script>
+  <script src="js/judge.js?v=15"></script>
 </body>
 </html>

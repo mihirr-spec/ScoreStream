@@ -9,6 +9,7 @@ const router = express.Router();
 router.use(require('./auth'));
 router.use(require('./events'));
 router.use(require('./teams'));
+router.use(require('./invitations'));
 router.use(require('./judges'));
 router.use(require('./scores'));
 router.use(require('./leaderboard'));

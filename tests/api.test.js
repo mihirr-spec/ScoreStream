@@ -28,6 +28,17 @@ let eventId;
 let teamA;
 let teamB;
 let firstScoreId;
+let teamAAccount;
+let teamBAccount;
+
+// Registers a team account, invites it to the test event by code and accepts.
+// Returns { code, token } of the account.
+async function joinEvent(name, members) {
+  const reg = await api('POST', '/api/auth/team-register', { body: { name, members, password: 'team-password' } });
+  const invite = await api('POST', `/api/events/${eventId}/invitations`, { token: adminToken, body: { code: reg.body.team.code } });
+  await api('POST', `/api/team/invitations/${invite.body._id}`, { token: reg.body.token, body: { accept: true } });
+  return { code: reg.body.team.code, token: reg.body.token };
+}
 
 // Small helper: call our API and return { status, body }.
 async function api(method, path, { token, body } = {}) {
@@ -85,8 +96,12 @@ before(async () => {
   });
   eventId = event.body._id;
 
-  teamA = (await api('POST', `/api/events/${eventId}/teams`, { token: adminToken, body: { name: 'Team A', members: ['Ann'] } })).body._id;
-  teamB = (await api('POST', `/api/events/${eventId}/teams`, { token: adminToken, body: { name: 'Team B', members: ['Ben'] } })).body._id;
+  // Teams register their own accounts, get invited by code, and accept.
+  teamAAccount = await joinEvent('Team A', ['Ann']);
+  teamBAccount = await joinEvent('Team B', ['Ben']);
+  const teams = (await api('GET', `/api/events/${eventId}/teams`, { token: adminToken })).body;
+  teamA = teams.find((t) => t.name === 'Team A')._id;
+  teamB = teams.find((t) => t.name === 'Team B')._id;
 
   const judge1 = await api('POST', `/api/events/${eventId}/judges`, { token: adminToken, body: { name: 'Judge 1' } });
   const judge2 = await api('POST', `/api/events/${eventId}/judges`, { token: adminToken, body: { name: 'Judge 2' } });
@@ -169,28 +184,71 @@ test('5. unauthorized user hits an admin route -> access denied', async () => {
   assert.equal(badToken.status, 401);
 });
 
-test('extra: team logs in with its code and sees its own rank', async () => {
-  // Creating a team returns its access code once (only the hash is stored).
-  const created = await api('POST', `/api/events/${eventId}/teams`, { token: adminToken, body: { name: 'Team C' } });
-  assert.equal(created.status, 201);
-  assert.match(created.body.code, /^[A-F0-9]{8}$/);
-
-  const login = await api('POST', '/api/auth/team-login', { body: { code: created.body.code } });
+test('extra: team signs in with code + password and sees its rank in the event', async () => {
+  assert.equal((await api('POST', '/api/auth/team-login', { body: { code: teamAAccount.code, password: 'wrong-password' } })).status, 401);
+  const login = await api('POST', '/api/auth/team-login', { body: { code: teamAAccount.code.toLowerCase(), password: 'team-password' } });
   assert.equal(login.status, 200);
+  const token = login.body.token;
 
-  // Team A has scores (tests 1 and 4), so log in as Team A via a fresh code.
-  const reset = await api('POST', `/api/teams/${teamA}/reset-code`, { token: adminToken });
-  const teamToken = (await api('POST', '/api/auth/team-login', { body: { code: reset.body.code } })).body.token;
-  const me = await api('GET', '/api/team/me', { token: teamToken });
-  assert.equal(me.status, 200);
+  const me = await api('GET', '/api/team/me', { token });
   assert.equal(me.body.team.name, 'Team A');
-  assert.equal(me.body.standing.rank, 2);
-  assert.equal(me.body.breakdown.length, 3);
-  assert.equal(me.body.feedback, null); // hidden while the event is live
+  assert.match(me.body.team.code, /^TM[A-Z0-9]{6}$/);
+  assert.equal(me.body.events.length, 1);
+  assert.equal(me.body.events[0].rank, 2);
+
+  const detail = await api('GET', `/api/team/events/${eventId}`, { token });
+  assert.equal(detail.status, 200);
+  assert.equal(detail.body.standing.rank, 2);
+  assert.equal(detail.body.breakdown.length, 3);
+  assert.equal(detail.body.judgeScores.length, 1);
+  assert.equal(detail.body.feedback, null); // hidden while the event is live
 
   // A team token must not open admin routes.
-  const denied = await api('GET', '/api/events', { token: teamToken });
-  assert.equal(denied.status, 403);
+  assert.equal((await api('GET', '/api/events', { token })).status, 403);
+});
+
+test('extra: a team joins only after accepting, and duplicates are refused', async () => {
+  const reg = await api('POST', '/api/auth/team-register', { body: { name: 'Team C', members: ['Cy'], password: 'team-password' } });
+  const code = reg.body.team.code;
+
+  // Unknown code, and a team that is already in the event.
+  assert.equal((await api('POST', `/api/events/${eventId}/invitations`, { token: adminToken, body: { code: 'TMZZZZZZ' } })).status, 404);
+  assert.equal((await api('POST', `/api/events/${eventId}/invitations`, { token: adminToken, body: { code: teamAAccount.code } })).status, 409);
+
+  // Inviting does NOT add the team yet, and a second invite is refused.
+  const invite = await api('POST', `/api/events/${eventId}/invitations`, { token: adminToken, body: { code } });
+  assert.equal(invite.status, 201);
+  assert.equal((await api('POST', `/api/events/${eventId}/invitations`, { token: adminToken, body: { code } })).status, 409);
+  assert.equal((await api('GET', `/api/events/${eventId}/teams`, { token: adminToken })).body.length, 2);
+
+  // The team sees the invitation with the admin's name, and accepts it.
+  const me = await api('GET', '/api/team/me', { token: reg.body.token });
+  assert.equal(me.body.invitations.length, 1);
+  assert.equal(me.body.invitations[0].eventName, 'Test Event');
+  assert.equal(me.body.invitations[0].invitedBy, config.adminUsername);
+  const accepted = await api('POST', `/api/team/invitations/${invite.body._id}`, { token: reg.body.token, body: { accept: true } });
+  assert.equal(accepted.status, 200);
+  assert.equal((await api('GET', `/api/events/${eventId}/teams`, { token: adminToken })).body.length, 3);
+  // Answering twice is refused.
+  assert.equal((await api('POST', `/api/team/invitations/${invite.body._id}`, { token: reg.body.token, body: { accept: false } })).status, 409);
+
+  // Excel-style bulk invite: a declined team never joins.
+  const regD = await api('POST', '/api/auth/team-register', { body: { name: 'Team D', members: [], password: 'team-password' } });
+  const bulk = await api('POST', `/api/events/${eventId}/invitations`, {
+    token: adminToken,
+    body: { codes: [regD.body.team.code, code, regD.body.team.code, 'nope'] },
+  });
+  assert.equal(bulk.body.invited.length, 1);
+  assert.equal(bulk.body.skipped.length, 3);
+  const inviteD = (await api('GET', '/api/team/me', { token: regD.body.token })).body.invitations[0];
+  await api('POST', `/api/team/invitations/${inviteD._id}`, { token: regD.body.token, body: { accept: false } });
+  assert.equal((await api('GET', `/api/events/${eventId}/teams`, { token: adminToken })).body.length, 3);
+
+  // The database itself refuses a second copy of a team in the same event.
+  const existing = await getDb().collection('teams').findOne({ name: 'Team C' });
+  const copy = { ...existing };
+  delete copy._id;
+  await assert.rejects(getDb().collection('teams').insertOne(copy), (err) => err.code === 11000);
 });
 
 test('extra: demo accounts are limited to the demo event', async () => {
@@ -206,6 +264,10 @@ test('extra: demo accounts are limited to the demo event', async () => {
     body: { teamId: me.body.teams[0]._id, criteria: { innovation: 10, design: 8, execution: 6 }, comment: 'Demo rating' },
   });
   assert.equal(rated.status, 201);
+
+  const demoTeam = (await api('POST', '/api/auth/demo-login', { body: { role: 'team' } })).body.token;
+  const teamMe = await api('GET', '/api/team/me', { token: demoTeam });
+  assert.equal(teamMe.body.events.length, 1);
 
   // The demo admin only sees the demo event, and cannot touch the real test event.
   const list = await api('GET', '/api/events', { token: demoAdmin });
@@ -230,6 +292,18 @@ test('6. generate AI feedback for a team -> summary + sentiment saved (mock)', a
   assert.ok(saved.summary.length > 0);
   assert.ok(['positive', 'neutral', 'negative'].includes(saved.sentiment.label));
   assert.equal(saved.source, 'mock');
+});
+
+test('extra: ending the event expires every judge code', async () => {
+  // Test 6 closed the event, so the judges' codes and open sessions no longer work.
+  const judges = await getDb().collection('judges').find({ eventId: new ObjectId(eventId) }).toArray();
+  assert.ok(judges.every((j) => j.expiredAt instanceof Date));
+  assert.equal((await api('GET', '/api/judge/me', { token: judgeToken })).status, 401);
+
+  // A new code from the admin makes the judge usable again.
+  const reset = await api('POST', `/api/judges/${judges[0]._id}/reset-code`, { token: adminToken });
+  const login = await api('POST', '/api/auth/judge-login', { body: { name: judges[0].name, code: reset.body.code } });
+  assert.equal(login.status, 200);
 });
 
 test('extra: judge must give the right name with a chosen code', async () => {
@@ -269,22 +343,6 @@ test('extra: registered admins only see and manage their own events', async () =
   const list = (await api('GET', '/api/events', { token })).body;
   assert.deepEqual(list.map((e) => e.name), ['My Event']);
 
-  // Bulk import (as sent by the Excel import): duplicates and bad rows are skipped.
-  const imported = await api('POST', `/api/events/${mine.body._id}/teams/import`, {
-    token,
-    body: {
-      teams: [
-        { name: 'Alpha', members: ['A1', 'A2'] },
-        { name: 'Beta', members: [], code: 'BETA-01' },
-        { name: 'alpha', members: [] },
-        { name: '', members: [] },
-      ],
-    },
-  });
-  assert.equal(imported.status, 201);
-  assert.equal(imported.body.imported, 2);
-  assert.equal(imported.body.skipped.length, 2);
-  assert.equal(imported.body.teams[1].code, 'BETA-01');
-  assert.equal((await api('POST', '/api/auth/team-login', { body: { code: 'beta-01' } })).status, 200);
-  assert.equal(await getDb().collection('teams').countDocuments({ eventId: new ObjectId(mine.body._id) }), 2);
+  // Another admin's event can't be used to invite teams either.
+  assert.equal((await api('POST', `/api/events/${eventId}/invitations`, { token, body: { code: teamAAccount.code } })).status, 403);
 });

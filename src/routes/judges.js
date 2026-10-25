@@ -69,14 +69,15 @@ router.post('/events/:eventId/judges', requireAdmin, async (req, res) => {
   });
 });
 
-// POST /api/judges/:id/reset-code  -> new code (the old one stops working), shown ONCE
+// POST /api/judges/:id/reset-code  -> new code (the old one stops working), shown ONCE.
+// Also how a judge gets back in after an ended event is reopened.
 router.post('/judges/:id/reset-code', requireAdmin, async (req, res) => {
   const judgeId = parseId(req.params.id, 'judge id');
   await findJudgeForAdmin(req, judgeId);
   const code = generateCode();
   const judge = await getDb()
     .collection('judges')
-    .findOneAndUpdate({ _id: judgeId }, { $set: { codeHash: sha256(code) } }, { returnDocument: 'after' });
+    .findOneAndUpdate({ _id: judgeId }, { $set: { codeHash: sha256(code) }, $unset: { expiredAt: '' } }, { returnDocument: 'after' });
   if (!judge) throw httpError(404, 'Judge not found');
   res.json({ _id: judge._id, name: judge.name, code, message: 'Save this code now - it will not be shown again' });
 });

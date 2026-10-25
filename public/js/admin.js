@@ -1,11 +1,10 @@
-// Admin dashboard. Each sidebar link is its own page (admin.html#teams etc.):
-//   Overview  - KPI cards + recent events
-//   Events    - every event, with status filters and search
-//   Teams     - roster, Excel import/export, team access codes
-//   Judges    - roster, judge access codes, scoring progress
-//   Rankings  - live ranking, AI feedback, every score
-//   Settings  - event status, rubric, account, end/delete
-// Teams, Judges, Rankings and Settings work on ONE event, chosen in the event bar.
+// Admin dashboard.
+//   #overview                   Dashboard: KPI cards + recent events
+//   #events                     every event, with status filters and search
+//   #event/<id>/teams           inside one event: teams + invitations
+//   #event/<id>/judges          judges, their codes and progress
+//   #event/<id>/rankings        live ranking, AI feedback, every score
+//   #event/<id>/settings        status, rubric, End Event, Delete
 // Every change goes through our JSON API.
 
 requireLogin('admin');
@@ -15,30 +14,20 @@ const isDemo = Boolean(tokenPayload('admin').demoEventId);
 const adminName = isDemo ? 'Demo admin' : tokenPayload('admin').username || 'Admin';
 setupUserBar('admin', adminName);
 $('avatar').textContent = initials(adminName);
-$('account-name').textContent = adminName;
-$('logout-btn-2').addEventListener('click', () => logout('admin'));
 
 // Shortcut: every admin request sends the admin token.
 const adminApi = (method, path, body) => api(method, path, body, 'admin');
 
-const VIEWS = {
-  overview: { title: 'Administrator Dashboard', crumb: 'Overview', desc: 'Monitor events, teams, judging progress, and feedback in one place.' },
-  events: { title: 'Events', desc: 'Create events, filter them by status and open one to manage it.' },
-  teams: { title: 'Teams', desc: 'Add teams one by one or import them from Excel, and hand out their access codes.' },
-  judges: { title: 'Judges', desc: 'Add judges with the code they sign in with, and track their scoring progress.' },
-  rankings: { title: 'Rankings & Feedback', desc: 'Live standings, every submitted score and the AI feedback for each team.' },
-  settings: { title: 'Settings', desc: 'Event status, scoring rubric and your account.' },
-};
+const EVENT_TABS = { teams: 'Teams', judges: 'Judges', rankings: 'Rankings & Feedback', settings: 'Event settings' };
 
 let allEvents = [];
 let activeFilter = 'all';
 let selectedEvent = null;
-let currentView = 'overview';
 let eventTeams = [];
 let eventJudges = [];
 let eventScores = [];
 let liveSource = null;
-// Codes created in this session (shown once, so we keep them here until the page closes).
+// Judge codes created in this session (shown once, so we keep them until the page closes).
 let recentCodes = [];
 
 // "Priya Chen" -> "PC"
@@ -56,6 +45,8 @@ function initials(name) {
 function pill(status) {
   return el('span', status, `pill ${status}`);
 }
+
+const eventUrl = (eventId, tab = 'teams') => `#event/${eventId}/${tab}`;
 
 // ---------- Menus ----------
 function closeMenus() {
@@ -151,23 +142,74 @@ function input(attrs = {}) {
   return node;
 }
 
-// ---------- Pages ----------
-// Shows or hides the event bar / "no event" box for the current page.
-function updateEventChrome() {
-  const needsEvent = Boolean(document.querySelector(`[data-view="${currentView}"]`).hasAttribute('data-needs-event'));
-  const missing = needsEvent && !selectedEvent;
-  $('event-bar').classList.toggle('hidden', !needsEvent || !selectedEvent);
-  $('no-event').classList.toggle('hidden', !missing);
-  $('no-event-create').classList.toggle('hidden', isDemo);
-  document.querySelector(`[data-view="${currentView}"]`).classList.toggle('hidden', missing);
-  $('create-event').classList.toggle('hidden', isDemo || !['overview', 'events'].includes(currentView));
+// ---------- Router ----------
+// "#event/<id>/judges" -> { view: 'judges', eventId: '<id>' }
+function parseRoute() {
+  const parts = location.hash.slice(1).split('/');
+  if (parts[0] === 'event' && /^[a-f0-9]{24}$/i.test(parts[1] || '')) {
+    return { view: EVENT_TABS[parts[2]] ? parts[2] : 'teams', eventId: parts[1] };
+  }
+  return { view: parts[0] === 'events' ? 'events' : 'overview', eventId: null };
 }
 
-const goTo = setupViews(VIEWS, 'overview', (name) => {
-  currentView = name;
+function setCrumbs(items) {
+  const box = $('crumbs');
+  box.replaceChildren();
+  items.forEach((item, i) => {
+    if (i > 0) box.append(el('span', '/', 'muted'));
+    if (i === items.length - 1) box.append(el('strong', item.label));
+    else if (item.href) {
+      const link = el('a', item.label);
+      link.href = item.href;
+      box.append(link);
+    } else box.append(el('span', item.label, 'muted'));
+  });
+}
+
+async function route() {
   closeMenus();
-  updateEventChrome();
-});
+  const { view, eventId } = parseRoute();
+  const inEvent = Boolean(eventId);
+
+  if (inEvent && (!selectedEvent || selectedEvent._id !== eventId)) {
+    try {
+      await selectEvent(eventId);
+    } catch (err) {
+      toast(err.message, 'error');
+      location.hash = 'events';
+      return;
+    }
+  }
+
+  for (const section of document.querySelectorAll('[data-view]')) section.classList.toggle('hidden', section.dataset.view !== view);
+  $('main-heading').classList.toggle('hidden', inEvent);
+  $('event-heading').classList.toggle('hidden', !inEvent);
+  $('event-nav').classList.toggle('hidden', !selectedEvent);
+  $('create-event').classList.toggle('hidden', isDemo);
+
+  // Sidebar + tabs: which page is active.
+  for (const link of document.querySelectorAll('.nav-item[data-nav]')) {
+    const active = link.dataset.nav === view;
+    link.classList.toggle('active', active);
+    if (active) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
+  }
+  for (const tab of document.querySelectorAll('.event-tabs .tab')) tab.classList.toggle('active', tab.dataset.tab === view);
+
+  if (view === 'overview') {
+    $('page-title').textContent = 'Administrator Dashboard';
+    $('page-desc').textContent = 'Monitor events, teams, judging progress, and feedback in one place.';
+    setCrumbs([{ label: 'Workspace' }, { label: 'Dashboard' }]);
+  } else if (view === 'events') {
+    $('page-title').textContent = 'Events';
+    $('page-desc').textContent = 'Create an event, then open it to add judges, invite teams and see results.';
+    setCrumbs([{ label: 'Workspace' }, { label: 'Events' }]);
+  } else {
+    setCrumbs([{ label: 'Events', href: '#events' }, { label: selectedEvent.name, href: eventUrl(selectedEvent._id) }, { label: EVENT_TABS[view] }]);
+  }
+  window.scrollTo(0, 0);
+}
+window.addEventListener('hashchange', () => safely(route));
 
 // ---------- KPIs + event tables ----------
 async function loadEvents() {
@@ -179,7 +221,6 @@ async function loadEvents() {
   // Every judge should score every team: the gap is what's still pending.
   $('kpi-pending').textContent = live.reduce((sum, e) => sum + Math.max(e.teamCount * e.judgeCount - e.scoreCount, 0), 0);
   renderEventTables();
-  renderPicker();
 }
 
 function progressOf(event) {
@@ -189,7 +230,12 @@ function progressOf(event) {
 
 function eventRow(event) {
   const row = el('tr');
-  if (selectedEvent && selectedEvent._id === event._id) row.classList.add('selected');
+
+  const name = el('td', null, 'event-name');
+  const nameLink = el('a', event.name);
+  nameLink.href = eventUrl(event._id);
+  nameLink.style.textDecoration = 'none';
+  name.append(nameLink);
 
   const status = el('td');
   status.append(pill(event.status));
@@ -201,14 +247,9 @@ function eventRow(event) {
   progress.append(track, `${progressOf(event)}%`);
 
   const actions = el('td');
-  const open = el('button', 'Open event', 'row-action');
-  open.type = 'button';
-  open.addEventListener('click', () =>
-    safely(async () => {
-      await selectEvent(event._id);
-      goTo('teams');
-    })
-  );
+  const open = el('a', 'Open event', 'row-action');
+  open.href = eventUrl(event._id);
+  open.style.textDecoration = 'none';
 
   const wrap = el('span', null, 'overflow-wrap');
   const more = el('button', '⋯', 'icon-button');
@@ -216,34 +257,15 @@ function eventRow(event) {
   more.setAttribute('aria-label', `More actions for ${event.name}`);
   more.setAttribute('aria-expanded', 'false');
   const menu = el('span', null, 'overflow-menu hidden');
-  const links = [
-    ['Teams', 'teams'],
-    ['Judges', 'judges'],
-    ['Rankings & feedback', 'rankings'],
-    ['Settings', 'settings'],
-  ];
-  for (const [label, view] of links) {
-    const btn = el('button', label);
-    btn.type = 'button';
-    btn.addEventListener('click', () =>
-      safely(async () => {
-        closeMenus();
-        await selectEvent(event._id);
-        goTo(view);
-      })
-    );
-    menu.append(btn);
+  for (const [tab, label] of Object.entries(EVENT_TABS)) {
+    const link = el('a', label);
+    link.href = eventUrl(event._id, tab);
+    menu.append(link);
   }
   const view = el('a', 'Public leaderboard ↗');
   view.href = `leaderboard.html?event=${event._id}`;
   view.target = '_blank';
   menu.append(view);
-  if (!isDemo) {
-    const del = el('button', 'Delete event', 'danger');
-    del.type = 'button';
-    del.addEventListener('click', () => safely(() => deleteEvent(event)));
-    menu.append(del);
-  }
   more.addEventListener('click', (e) => {
     e.stopPropagation();
     toggleMenu(more, menu);
@@ -251,12 +273,12 @@ function eventRow(event) {
   wrap.append(more, menu);
   actions.append(open, ' ', wrap);
 
-  row.append(el('td', event.name, 'event-name'), status, el('td', event.teamCount), el('td', event.judgeCount), progress, actions);
+  row.append(name, status, el('td', event.teamCount), el('td', event.judgeCount), progress, actions);
   return row;
 }
 
 function renderEventTables() {
-  // Overview: the 5 newest events.
+  // Dashboard: the 5 newest events.
   $('recent-rows').replaceChildren(...allEvents.slice(0, 5).map(eventRow));
   $('no-recent').classList.toggle('hidden', allEvents.length > 0);
 
@@ -269,10 +291,10 @@ function renderEventTables() {
   none.textContent = allEvents.length === 0 ? 'No events yet. Click "Create Event" to set up your first one.' : 'No events match your search.';
 }
 
-for (const tab of document.querySelectorAll('.tab')) {
+for (const tab of document.querySelectorAll('.filter-tab')) {
   tab.addEventListener('click', () => {
     activeFilter = tab.dataset.filter;
-    for (const t of document.querySelectorAll('.tab')) {
+    for (const t of document.querySelectorAll('.filter-tab')) {
       t.classList.toggle('active', t === tab);
       t.setAttribute('aria-selected', String(t === tab));
     }
@@ -287,22 +309,8 @@ $('event-search').addEventListener('input', () => {
 $('global-search').addEventListener('input', () => {
   $('event-search').value = $('global-search').value;
   renderEventTables();
-  if (currentView !== 'events') goTo('events');
+  if (parseRoute().view !== 'events') location.hash = 'events';
 });
-
-// ---------- Event picker ----------
-function renderPicker() {
-  const picker = $('event-picker');
-  picker.replaceChildren(
-    ...allEvents.map((e) => {
-      const option = el('option', `${e.name}  (${e.status})`);
-      option.value = e._id;
-      return option;
-    })
-  );
-  if (selectedEvent) picker.value = selectedEvent._id;
-}
-$('event-picker').addEventListener('change', () => safely(() => selectEvent($('event-picker').value)));
 
 // ---------- Create event ----------
 function rubricRow(values = {}) {
@@ -331,7 +339,7 @@ function rubricRow(values = {}) {
   return row;
 }
 
-function openCreateEvent() {
+$('create-event').addEventListener('click', () => {
   const name = input({ required: true, maxLength: 100, placeholder: 'e.g. Spring Hackathon 2026' });
   const status = el('select');
   for (const [value, label] of [['draft', 'Draft (set up teams and judges first)'], ['live', 'Live (judges can score now)']]) {
@@ -384,44 +392,43 @@ function openCreateEvent() {
     onSubmit: async () => {
       // The server validates everything again - this form is just a convenience.
       const event = await adminApi('POST', '/api/events', { name: name.value, status: status.value, rubric: readRubric() });
-      toast(`Event "${event.name}" created - now add its teams`);
+      toast(`Event "${event.name}" created - add judges and invite teams`);
       await loadEvents();
-      await selectEvent(event._id);
-      goTo('teams');
+      location.hash = eventUrl(event._id, 'judges');
     },
   });
-}
-$('create-event').addEventListener('click', openCreateEvent);
-$('no-event-create').addEventListener('click', openCreateEvent);
+});
 
 // ---------- The selected event ----------
 async function selectEvent(eventId) {
   const changed = !selectedEvent || selectedEvent._id !== eventId;
   selectedEvent = await adminApi('GET', `/api/events/${eventId}`);
   const ev = selectedEvent;
-  try {
-    sessionStorage.setItem('adminEvent', ev._id);
-  } catch {
-    /* storage blocked - the first event is picked next time */
-  }
   if (changed) recentCodes = [];
 
-  $('selected-status').replaceWith(Object.assign(pill(ev.status), { id: 'selected-status' }));
-  $('selected-rubric').textContent = ev.rubric.map((r) => `${r.label} ${Math.round(r.weight * 100)}%`).join('  ·  ');
+  // Heading, sidebar and tab links of this event.
+  $('event-title').textContent = ev.name;
+  $('event-status').replaceChildren(pill(ev.status));
+  $('event-rubric').textContent = ev.rubric.map((r) => `${r.label} ${Math.round(r.weight * 100)}%`).join('  ·  ');
   $('leaderboard-link').href = `leaderboard.html?event=${ev._id}`;
-  renderPicker();
-  renderEventTables();
-  updateEventChrome();
+  $('event-nav-name').textContent = ev.name;
+  for (const tab of Object.keys(EVENT_TABS)) $(`nav-${tab}`).href = eventUrl(ev._id, tab);
+  for (const tab of document.querySelectorAll('.event-tabs .tab')) tab.href = eventUrl(ev._id, tab.dataset.tab);
 
   // Settings page
-  for (const status of ['draft', 'live', 'closed']) $(`set-${status}`).classList.toggle('active', ev.status === status);
-  $('end-event').disabled = ev.status === 'closed';
-  $('end-event').textContent = ev.status === 'closed' ? 'Event ended' : 'End Event';
-  $('delete-event').classList.toggle('hidden', isDemo);
+  const closed = ev.status === 'closed';
+  $('set-draft').classList.toggle('active', ev.status === 'draft');
+  $('set-live').classList.toggle('active', ev.status === 'live');
+  $('end-event').disabled = closed;
+  $('end-event').textContent = closed ? 'Event ended' : 'End Event';
+  $('end-text').textContent = closed
+    ? 'This event has ended: scoring is closed and every judge code has expired. Setting it live again needs new judge codes (Judges page, "New code").'
+    : 'Closes scoring, publishes the final ranking, writes AI feedback for every team and expires every judge code.';
+  $('delete-card').classList.toggle('hidden', isDemo);
   $('controls-text').textContent = {
     draft: 'Draft: judges cannot score yet. Go live when your teams and judges are ready.',
-    live: 'Live: judges are scoring now.',
-    closed: 'Closed: final ranks are published. Set it live again if judges need to change scores.',
+    live: 'Live: judges are scoring now. Use "End Event" below when judging is over.',
+    closed: 'Ended. You can set it live again if judges need to change scores.',
   }[ev.status];
   const rubric = $('rubric-list');
   rubric.replaceChildren();
@@ -430,17 +437,18 @@ async function selectEvent(eventId) {
     row.append(el('span', r.label, 'score-label'), el('span', `max ${r.max}  ·  weight ${Math.round(r.weight * 100)}%`, 'score-status'));
     rubric.append(row);
   }
+  $('invite-form').querySelector('button').disabled = closed;
+  $('judge-form').querySelector('button').disabled = closed;
 
   // Rankings page
-  $('generate-feedback').disabled = ev.status !== 'closed';
-  $('feedback-note').textContent =
-    ev.status === 'closed'
-      ? 'Written by AI from the judges’ comments. Regenerate if judges changed their comments.'
-      : 'Written by AI for every team when you end the event.';
+  $('generate-feedback').disabled = !closed;
+  $('feedback-note').textContent = closed
+    ? 'Written by AI from the judges’ comments. Regenerate if judges changed their comments.'
+    : 'Written by AI for every team when you end the event.';
 
   if (changed) watchLeaderboard(ev._id);
   renderCodes();
-  await Promise.all([loadTeams(), loadJudges(), loadRankings(), loadFeedback()]);
+  await Promise.all([loadTeams(), loadInvitations(), loadJudges(), loadRankings(), loadFeedback()]);
   await loadScores();
 }
 
@@ -450,177 +458,127 @@ async function refreshCounts() {
 }
 
 async function setStatus(status) {
-  if (status === 'closed') return endEvent();
   await adminApi('PATCH', `/api/events/${selectedEvent._id}`, { status });
   await loadEvents();
   await selectEvent(selectedEvent._id);
   toast(status === 'live' ? 'Event is live - judges can score now' : 'Event moved to draft - judges cannot score');
 }
-for (const status of ['draft', 'live', 'closed']) {
-  $(`set-${status}`).addEventListener('click', () => safely(() => setStatus(status)));
-}
+$('set-draft').addEventListener('click', () => safely(() => setStatus('draft')));
+$('set-live').addEventListener('click', () => safely(() => setStatus('live')));
 
-async function endEvent() {
-  if (selectedEvent.status === 'closed') return;
-  const ok = await confirmModal(
-    'End Event?',
-    'This closes scoring for the selected event, publishes the final ranking and writes AI feedback for every team.',
-    'Confirm End Event'
-  );
-  if (!ok) return;
-  await adminApi('PATCH', `/api/events/${selectedEvent._id}`, { status: 'closed' });
-  await loadEvents();
-  await selectEvent(selectedEvent._id);
-  toast('Event ended - writing AI feedback for every team...');
-  goTo('rankings');
-  watchFeedback(selectedEvent._id);
-}
-$('end-event').addEventListener('click', () => safely(endEvent));
+$('end-event').addEventListener('click', () =>
+  safely(async () => {
+    const ok = await confirmModal(
+      'End Event?',
+      'Scoring closes, the final ranking is published, AI feedback is written for every team, and every judge code of this event expires.',
+      'Confirm End Event'
+    );
+    if (!ok) return;
+    await adminApi('PATCH', `/api/events/${selectedEvent._id}`, { status: 'closed' });
+    await loadEvents();
+    await selectEvent(selectedEvent._id);
+    toast('Event ended - judge codes expired, writing AI feedback...');
+    location.hash = eventUrl(selectedEvent._id, 'rankings');
+    watchFeedback(selectedEvent._id);
+  })
+);
 
-async function deleteEvent(event) {
-  closeMenus();
-  const ok = await confirmModal('Delete event?', `"${event.name}" and ALL its teams, judges, scores and feedback will be deleted. This cannot be undone.`, 'Delete event');
-  if (!ok) return;
-  await adminApi('DELETE', `/api/events/${event._id}`);
-  toast('Event deleted');
-  if (selectedEvent && selectedEvent._id === event._id) {
+$('delete-event').addEventListener('click', () =>
+  safely(async () => {
+    const event = selectedEvent;
+    const ok = await confirmModal('Delete event?', `"${event.name}" and all its judges, scores and feedback will be deleted. This cannot be undone.`, 'Delete event');
+    if (!ok) return;
+    await adminApi('DELETE', `/api/events/${event._id}`);
+    toast('Event deleted');
     selectedEvent = null;
     if (liveSource) liveSource.close();
-  }
-  await loadEvents();
-  if (!selectedEvent && allEvents.length) await selectEvent(allEvents[0]._id);
-  updateEventChrome();
-  if (!selectedEvent) goTo('events');
-}
-$('delete-event').addEventListener('click', () => safely(() => deleteEvent(selectedEvent)));
+    await loadEvents();
+    location.hash = 'events';
+  })
+);
 
-// ---------- Access codes (shown once) ----------
-function rememberCode(kind, name, code, members = []) {
-  recentCodes.unshift({ kind, name, code, members });
-  renderCodes();
-}
-
-// Fills the "Team access codes" (Teams page) and "Judge access codes" (Judges page) cards.
-function renderCodes() {
-  for (const box of document.querySelectorAll('[data-codes]')) {
-    const kind = box.dataset.codes;
-    const codes = recentCodes.filter((c) => c.kind === kind);
-    box.replaceChildren();
-    if (codes.length === 0) {
-      box.append(el('p', `New codes appear here when you add a ${kind}${kind === 'team' ? ', import a sheet' : ''} or click New code.`, 'empty-text'));
-      continue;
-    }
-    for (const item of codes) {
-      const row = el('div', null, 'access-row');
-      const who = el('div', null, 'access-who');
-      who.append(item.name);
-      if (item.members.length) who.append(el('span', item.members.join(', ')));
-      const right = el('div', null, 'action-row');
-      right.style.alignItems = 'center';
-      const copy = el('button', 'Copy', 'tiny-button');
-      copy.type = 'button';
-      copy.addEventListener('click', () =>
-        safely(async () => {
-          await navigator.clipboard.writeText(item.code);
-          copy.textContent = 'Copied';
-          setTimeout(() => (copy.textContent = 'Copy'), 1800);
-        })
-      );
-      right.append(el('span', item.code, 'code'), copy);
-      row.append(who, right);
-      box.append(row);
-    }
-    const actions = el('div', null, 'action-row');
-    actions.style.marginTop = '14px';
-    const download = el('button', 'Download codes (.xlsx)', 'secondary');
-    download.type = 'button';
-    download.addEventListener('click', () =>
-      safely(() =>
-        downloadSheet(
-          codes.map((c) => (kind === 'team' ? { 'Team name': c.name, Members: c.members.join(', '), Code: c.code } : { Judge: c.name, Code: c.code })),
-          kind === 'team' ? 'Team codes' : 'Judge codes',
-          `${slug(selectedEvent.name)}-${kind}-codes.xlsx`
-        )
-      )
-    );
-    const clear = el('button', 'Clear', 'secondary');
-    clear.type = 'button';
-    clear.addEventListener('click', () => {
-      recentCodes = recentCodes.filter((c) => c.kind !== kind);
-      renderCodes();
-    });
-    actions.append(download, clear);
-    box.append(actions);
-  }
-}
-
-// One row of the team / judge roster, with "New code" and "Delete".
-function personRow(name, subtitle, onReset, onDelete) {
+// One row of a roster: initials, name + subtitle, then any buttons.
+function personRow(name, subtitle, ...buttons) {
   const item = el('li');
   const main = el('div', null, 'person-main');
   main.append(name);
-  if (subtitle) main.append(el('span', subtitle));
-  const reset = el('button', 'New code', 'tiny-button');
-  reset.type = 'button';
-  reset.addEventListener('click', () => safely(onReset));
-  const del = el('button', 'Delete', 'tiny-button danger');
-  del.type = 'button';
-  del.addEventListener('click', () => safely(onDelete));
-  item.append(el('span', initials(name), 'initial'), main, reset, del);
+  if (subtitle) main.append(subtitle instanceof Node ? subtitle : el('span', subtitle));
+  item.append(el('span', initials(name), 'initial'), main, ...buttons);
   return item;
 }
+function rowButton(label, onClick, danger = false) {
+  const btn = el('button', label, `tiny-button${danger ? ' danger' : ''}`);
+  btn.type = 'button';
+  btn.addEventListener('click', () => safely(onClick));
+  return btn;
+}
 
-// ---------- Teams ----------
+// ---------- Teams + invitations ----------
 async function loadTeams() {
   eventTeams = await adminApi('GET', `/api/events/${selectedEvent._id}/teams`);
   $('team-count').textContent = `${eventTeams.length} team${eventTeams.length === 1 ? '' : 's'}`;
   const list = $('team-list');
   list.replaceChildren();
-  if (eventTeams.length === 0) list.append(el('li', 'No teams yet. Add one or import an Excel sheet.', 'empty-text'));
+  if (eventTeams.length === 0) list.append(el('li', 'No teams yet. Invite a team with its team code.', 'empty-text'));
   for (const team of eventTeams) {
+    const sub = el('span', null);
+    sub.append(team.members.join(', ') || 'No members listed');
+    if (team.code) sub.append('  ·  ', el('span', team.code, 'code-chip'));
     list.append(
       personRow(
         team.name,
-        team.members.join(', '),
-        async () => {
-          const ok = await confirmModal('New code?', `${team.name}'s old code will stop working.`, 'Create new code', false);
-          if (!ok) return;
-          const res = await adminApi('POST', `/api/teams/${team._id}/reset-code`);
-          rememberCode('team', res.name, res.code, team.members);
-        },
-        async () => {
-          const ok = await confirmModal('Delete team?', `"${team.name}" and its scores will be deleted.`, 'Delete team');
-          if (!ok) return;
-          await adminApi('DELETE', `/api/teams/${team._id}`);
-          toast('Team deleted');
-          await Promise.all([loadTeams(), loadRankings()]);
-          await refreshCounts();
-        }
+        sub,
+        rowButton(
+          'Remove',
+          async () => {
+            const ok = await confirmModal('Remove team?', `"${team.name}" leaves this event and its scores are deleted. The team account itself is kept.`, 'Remove team');
+            if (!ok) return;
+            await adminApi('DELETE', `/api/teams/${team._id}`);
+            toast('Team removed from the event');
+            await Promise.all([loadTeams(), loadRankings()]);
+            await refreshCounts();
+          },
+          true
+        )
       )
     );
   }
 }
 
-$('add-team').addEventListener('click', () => {
-  const name = input({ required: true, maxLength: 100, placeholder: 'e.g. Byte Bandits' });
-  const members = input({ placeholder: 'Asha, Rohan' });
-  const code = input({ maxLength: 30, placeholder: 'Random if empty' });
-  openModal({
-    title: 'Add Team',
-    text: 'Add a team to this event. The team signs in on the Student tab with its access code.',
-    fields: [field('Team name', name), field('Members', members, '(comma separated)'), field('Access code', code, '(optional, 4-30 characters)')],
-    submitLabel: 'Add Team',
-    onSubmit: async () => {
-      const team = await adminApi('POST', `/api/events/${selectedEvent._id}/teams`, {
-        name: name.value,
-        members: members.value.split(',').map((m) => m.trim()).filter(Boolean),
-        code: code.value,
-      });
-      toast(`Team "${team.name}" added - its code is in Team access codes`);
-      rememberCode('team', team.name, team.code, team.members);
-      await loadTeams();
-      await refreshCounts();
-    },
+async function loadInvitations() {
+  const invitations = await adminApi('GET', `/api/events/${selectedEvent._id}/invitations`);
+  $('invite-count').textContent = invitations.length;
+  const list = $('invite-list');
+  list.replaceChildren();
+  if (invitations.length === 0) list.append(el('li', 'No invitations waiting.', 'empty-text'));
+  for (const inv of invitations) {
+    const sub = el('span', null);
+    sub.append(el('span', inv.code, 'code-chip'), `  ·  invited ${new Date(inv.createdAt).toLocaleDateString()}`);
+    list.append(
+      personRow(
+        inv.name,
+        sub,
+        rowButton(
+          'Withdraw',
+          async () => {
+            await adminApi('DELETE', `/api/invitations/${inv._id}`);
+            toast('Invitation withdrawn');
+            await loadInvitations();
+          },
+          true
+        )
+      )
+    );
+  }
+}
+
+$('invite-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  safely(async () => {
+    const inv = await adminApi('POST', `/api/events/${selectedEvent._id}/invitations`, { code: $('invite-code').value });
+    $('invite-code').value = '';
+    toast(`Invitation sent to ${inv.name}. They join once they accept.`);
+    await loadInvitations();
   });
 });
 
@@ -630,50 +588,100 @@ async function loadJudges() {
   $('judge-count').textContent = `${eventJudges.length} judge${eventJudges.length === 1 ? '' : 's'}`;
   const list = $('judge-list');
   list.replaceChildren();
-  if (eventJudges.length === 0) list.append(el('li', 'No judges yet. Add the first one below.', 'empty-text'));
+  if (eventJudges.length === 0) list.append(el('li', 'No judges yet. Add the first one.', 'empty-text'));
   for (const judge of eventJudges) {
+    const sub = el('span', null);
+    if (judge.expiredAt) sub.append(pill('code expired'));
+    else sub.append('Signs in with this name + code');
     list.append(
       personRow(
         judge.name,
-        'Signs in with this name + code',
-        async () => {
-          const ok = await confirmModal('New code?', `${judge.name}'s old code will stop working.`, 'Create new code', false);
+        sub,
+        rowButton('New code', async () => {
+          const ok = await confirmModal('New code?', `${judge.name}'s old code stops working and a new one is generated.`, 'Generate new code', false);
           if (!ok) return;
           const res = await adminApi('POST', `/api/judges/${judge._id}/reset-code`);
-          rememberCode('judge', res.name, res.code);
-        },
-        async () => {
-          const ok = await confirmModal('Delete judge?', `"${judge.name}" and all their scores will be deleted.`, 'Delete judge');
-          if (!ok) return;
-          await adminApi('DELETE', `/api/judges/${judge._id}`);
-          toast('Judge deleted');
-          await Promise.all([loadJudges(), loadRankings()]);
-          await refreshCounts();
-        }
+          rememberCode(res.name, res.code);
+          await loadJudges();
+        }),
+        rowButton(
+          'Delete',
+          async () => {
+            const ok = await confirmModal('Delete judge?', `"${judge.name}" and all their scores will be deleted.`, 'Delete judge');
+            if (!ok) return;
+            await adminApi('DELETE', `/api/judges/${judge._id}`);
+            toast('Judge deleted');
+            await Promise.all([loadJudges(), loadRankings()]);
+            await refreshCounts();
+          },
+          true
+        )
       )
     );
   }
 }
 
-$('add-judge').addEventListener('click', () => {
-  const name = input({ required: true, maxLength: 100, placeholder: 'e.g. Prof. Rao' });
-  const code = input({ maxLength: 30, placeholder: 'e.g. JUDGE01 - random if empty' });
-  openModal({
-    title: 'Add Judge',
-    text: 'The judge signs in on the Judge tab with exactly this name and the access code.',
-    fields: [field('Judge name', name), field('Access code', code, '(optional, 4-30 characters)')],
-    submitLabel: 'Add Judge',
-    onSubmit: async () => {
-      const judge = await adminApi('POST', `/api/events/${selectedEvent._id}/judges`, { name: name.value, code: code.value });
-      toast(`Judge "${judge.name}" added - their code is in Judge access codes`);
-      rememberCode('judge', judge.name, judge.code);
-      await loadJudges();
-      await refreshCounts();
-    },
+$('judge-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  safely(async () => {
+    const judge = await adminApi('POST', `/api/events/${selectedEvent._id}/judges`, { name: $('judge-name').value });
+    $('judge-name').value = '';
+    toast(`Judge "${judge.name}" added - copy their code now`);
+    rememberCode(judge.name, judge.code);
+    await loadJudges();
+    await refreshCounts();
   });
 });
 
-// ---------- Excel import / export ----------
+function rememberCode(name, code) {
+  recentCodes.unshift({ name, code });
+  renderCodes();
+}
+
+function renderCodes() {
+  const box = $('code-list');
+  box.replaceChildren();
+  if (recentCodes.length === 0) {
+    box.append(el('p', 'A new code appears here when you add a judge or click New code.', 'empty-text'));
+    return;
+  }
+  for (const item of recentCodes) {
+    const row = el('div', null, 'access-row');
+    const who = el('div', null, 'access-who');
+    who.append(el('span', 'Judge name'), item.name);
+    const right = el('div', null, 'action-row');
+    right.style.alignItems = 'center';
+    const copy = el('button', 'Copy', 'tiny-button');
+    copy.type = 'button';
+    copy.addEventListener('click', () =>
+      safely(async () => {
+        await navigator.clipboard.writeText(item.code);
+        copy.textContent = 'Copied';
+        setTimeout(() => (copy.textContent = 'Copy'), 1800);
+      })
+    );
+    right.append(el('span', item.code, 'code'), copy);
+    row.append(who, right);
+    box.append(row);
+  }
+  const actions = el('div', null, 'action-row');
+  actions.style.marginTop = '14px';
+  const download = el('button', 'Download codes (.xlsx)', 'secondary');
+  download.type = 'button';
+  download.addEventListener('click', () =>
+    safely(() =>
+      downloadSheet(
+        recentCodes.map((c) => ({ Judge: c.name, Code: c.code })),
+        'Judge codes',
+        `${slug(selectedEvent.name)}-judge-codes.xlsx`
+      )
+    )
+  );
+  actions.append(download);
+  box.append(actions);
+}
+
+// ---------- Excel: invite by team codes, export teams ----------
 // SheetJS reads and writes .xlsx/.xls/.csv in the browser. It is only downloaded
 // the first time the admin imports or exports.
 let sheetJs = null;
@@ -705,37 +713,21 @@ async function downloadSheet(rows, sheetName, fileName) {
 // "Spring Hackathon 2026" -> "spring-hackathon-2026"
 const slug = (text) => text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'event';
 
-// Turns sheet rows into { name, members, code } using the column headings:
-// a heading containing "team" or "name" = team name, any heading containing
-// "member" = members (several member columns are fine), "code" = access code.
-function rowsToTeams(rows) {
-  return rows.map((row) => {
-    const team = { name: '', members: [], code: '' };
-    for (const [heading, value] of Object.entries(row)) {
-      const h = heading.toLowerCase();
-      const text = String(value ?? '').trim();
-      if (!text) continue;
-      if (h.includes('member')) team.members.push(...text.split(/[,;\n]/).map((m) => m.trim()).filter(Boolean));
-      else if (h.includes('code')) team.code = text;
-      else if (!team.name && (h.includes('team') || h.includes('name'))) team.name = text;
-    }
-    return team;
-  });
-}
-
 $('template-btn').addEventListener('click', () =>
   safely(() =>
     downloadSheet(
       [
-        { 'Team name': 'Byte Bandits', Members: 'Asha, Rohan', Code: '' },
-        { 'Team name': 'Null Pointers', Members: 'Kabir, Meera, Dev', Code: 'NULLPTR1' },
+        { 'Team code': 'TM7K4Q2X', 'Team name (optional)': 'Byte Bandits' },
+        { 'Team code': 'TMQ9R2LP', 'Team name (optional)': 'Null Pointers' },
       ],
       'Teams',
-      'scorestream-teams-template.xlsx'
+      'scorestream-invite-template.xlsx'
     )
   )
 );
 
+// Reads the "Team code" column (or any column whose heading contains "code")
+// and sends one invitation per code.
 $('import-file').addEventListener('change', (e) =>
   safely(async () => {
     const file = e.target.files[0];
@@ -744,33 +736,31 @@ $('import-file').addEventListener('change', (e) =>
     const XLSX = await loadSheetJs();
     const book = XLSX.read(await file.arrayBuffer());
     const rows = XLSX.utils.sheet_to_json(book.Sheets[book.SheetNames[0]], { defval: '' });
-    const teams = rowsToTeams(rows).filter((t) => t.name || t.members.length || t.code);
-    if (teams.length === 0) throw new Error('No teams found. The first sheet needs a "Team name" column.');
+    const codes = rows
+      .map((row) => {
+        const key = Object.keys(row).find((h) => h.toLowerCase().includes('code'));
+        return key ? String(row[key]).trim() : '';
+      })
+      .filter(Boolean);
+    if (codes.length === 0) throw new Error('No team codes found. The first sheet needs a "Team code" column.');
 
-    // The server saves every valid row with one insertMany into MongoDB.
-    const result = await adminApi('POST', `/api/events/${selectedEvent._id}/teams/import`, { teams });
-    for (const t of [...result.teams].reverse()) recentCodes.unshift({ kind: 'team', name: t.name, code: t.code, members: t.members });
-    renderCodes();
-    await loadTeams();
-    await refreshCounts();
-
-    if (result.skipped.length) {
-      const list = el('ul', null, 'small muted');
-      for (const s of result.skipped) list.append(el('li', `${s.row ? `Row ${s.row}` : `"${s.name}"`}: ${s.reason}`));
-      openModal({
-        title: `Imported ${result.imported} team(s)`,
-        text: `${result.skipped.length} row(s) were skipped. The new codes are in Team access codes.`,
-        fields: [list],
-        submitLabel: 'OK',
-        showCancel: false,
-      });
-    } else {
-      toast(`Imported ${result.imported} team(s) - codes are in Team access codes`);
-    }
+    const result = await adminApi('POST', `/api/events/${selectedEvent._id}/invitations`, { codes });
+    await loadInvitations();
+    const list = el('ul', null, 'small muted');
+    for (const s of result.skipped) list.append(el('li', `Row ${s.row} (${s.code || 'empty'}${s.name ? `, ${s.name}` : ''}): ${s.reason}`));
+    openModal({
+      title: `Sent ${result.invited.length} invitation(s)`,
+      text: result.skipped.length
+        ? `${result.skipped.length} row(s) were skipped. Teams join once they accept.`
+        : 'Teams join once they accept the invitation on their dashboard.',
+      fields: result.skipped.length ? [list] : [],
+      submitLabel: 'OK',
+      showCancel: false,
+    });
   })
 );
 
-// Export: every team with its members, and its rank / average once judges have scored.
+// Export: every team with its code, members, rank and average.
 $('export-btn').addEventListener('click', () =>
   safely(async () => {
     if (eventTeams.length === 0) throw new Error('No teams to export yet');
@@ -779,7 +769,7 @@ $('export-btn').addEventListener('click', () =>
     const rows = eventTeams
       .map((t) => {
         const r = byTeam.get(t._id);
-        return { Rank: r ? r.rank : '', 'Team name': t.name, Members: t.members.join(', '), 'Average score': r ? r.avgScore : '', Judges: r ? r.judgesCount : 0 };
+        return { Rank: r ? r.rank : '', 'Team name': t.name, 'Team code': t.code || '', Members: t.members.join(', '), 'Average score': r ? r.avgScore : '', Judges: r ? r.judgesCount : 0 };
       })
       .sort((a, b) => (a.Rank || Infinity) - (b.Rank || Infinity));
     await downloadSheet(rows, 'Teams', `${slug(selectedEvent.name)}-teams.xlsx`);
@@ -820,7 +810,7 @@ function watchLeaderboard(eventId) {
   liveSource.addEventListener('error', () => $('live-flag').classList.add('hidden'));
 }
 
-// ---------- Scores: judge progress (Judges page) + every score (Rankings page) ----------
+// ---------- Scores: judging progress (Judges page) + every score (Rankings page) ----------
 async function loadScores() {
   if (!selectedEvent) return;
   eventScores = await adminApi('GET', `/api/events/${selectedEvent._id}/scores`);
@@ -836,7 +826,7 @@ async function loadScores() {
     const fill = el('span', null, 'progress-fill');
     fill.style.width = eventTeams.length ? `${Math.round((done / eventTeams.length) * 100)}%` : '0%';
     track.append(fill);
-    progress.append(track, `${done} / ${eventTeams.length} complete`);
+    progress.append(track, `${done} / ${eventTeams.length} teams scored`);
     row.append(el('span', judge.name, 'score-label'), progress);
     box.append(row);
   }
@@ -905,7 +895,7 @@ $('generate-feedback').addEventListener('click', () =>
       await loadFeedback();
     } finally {
       btn.disabled = selectedEvent.status !== 'closed';
-      btn.textContent = 'Regenerate Feedback';
+      btn.textContent = 'Regenerate feedback';
     }
   })
 );
@@ -914,14 +904,7 @@ $('generate-feedback').addEventListener('click', () =>
 if (isDemo) $('demo-banner').classList.remove('hidden');
 safely(async () => {
   await loadEvents();
-  // Re-open the event used last time in this tab (or the demo event, or the newest one).
-  let saved = null;
-  try {
-    saved = sessionStorage.getItem('adminEvent');
-  } catch {
-    /* storage blocked */
-  }
-  const start = isDemo ? tokenPayload('admin').demoEventId : allEvents.find((e) => e._id === saved)?._id || allEvents[0]?._id;
-  if (start) await selectEvent(start);
-  updateEventChrome();
+  // The demo admin goes straight into the demo event.
+  if (isDemo && !parseRoute().eventId) location.replace(eventUrl(tokenPayload('admin').demoEventId));
+  await route();
 });

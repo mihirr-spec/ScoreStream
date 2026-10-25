@@ -65,16 +65,52 @@ const validators = {
     },
   },
 
+  // A team's place in ONE event. Scores, the leaderboard and feedback all point here.
+  // name/members are copied from the team account when the team accepts the invitation.
   teams: {
     $jsonSchema: {
       bsonType: 'object',
       required: ['eventId', 'name', 'members'],
       properties: {
         eventId: { bsonType: 'objectId' }, // reference to events._id
+        accountId: { bsonType: 'objectId' }, // reference to teamAccounts._id
         name: { bsonType: 'string', minLength: 1 },
         members: { bsonType: 'array', items: { bsonType: 'string' } },
-        // Optional: SHA-256 of the team's access code (used for team login).
+        joinedAt: { bsonType: 'date' },
+        // Old-style teams (before team accounts) had their own access code hash.
         codeHash: { bsonType: 'string', pattern: '^[a-f0-9]{64}$' },
+      },
+    },
+  },
+
+  // A team that registered on the platform. Its code never changes and is how an
+  // admin invites it; the password (scrypt hash) is what proves it IS that team.
+  teamAccounts: {
+    $jsonSchema: {
+      bsonType: 'object',
+      required: ['name', 'members', 'code', 'passwordHash', 'createdAt'],
+      properties: {
+        name: { bsonType: 'string', minLength: 1, maxLength: 100 },
+        members: { bsonType: 'array', maxItems: 20, items: { bsonType: 'string' } },
+        code: { bsonType: 'string', pattern: '^TM[A-Z0-9]{6}$' },
+        passwordHash: { bsonType: 'string', pattern: '^[a-f0-9]{32}:[a-f0-9]{128}$' },
+        createdAt: { bsonType: 'date' },
+      },
+    },
+  },
+
+  // An admin asking a team to join an event. The team joins only if it accepts.
+  invitations: {
+    $jsonSchema: {
+      bsonType: 'object',
+      required: ['eventId', 'accountId', 'invitedBy', 'status', 'createdAt'],
+      properties: {
+        eventId: { bsonType: 'objectId' },
+        accountId: { bsonType: 'objectId' },
+        invitedBy: { bsonType: 'string' }, // the admin's username, shown to the team
+        status: { enum: ['pending', 'accepted', 'declined'] },
+        createdAt: { bsonType: 'date' },
+        respondedAt: { bsonType: 'date' },
       },
     },
   },
@@ -89,6 +125,8 @@ const validators = {
         // SHA-256 written as hex is always exactly 64 characters 0-9 a-f.
         // So the plain access code can never be stored here by mistake.
         codeHash: { bsonType: 'string', pattern: '^[a-f0-9]{64}$' },
+        // Set when the admin ends the event: the code stops working from then on.
+        expiredAt: { bsonType: 'date' },
       },
     },
   },
@@ -174,6 +212,14 @@ const indexes = {
   ],
   teams: [
     { key: { eventId: 1 }, options: { name: 'eventId_1' } },
+    // NO DUPLICATES: a team account can be in each event only once. PARTIAL, because
+    // old-style teams have no accountId and must not clash with each other.
+    {
+      key: { eventId: 1, accountId: 1 },
+      options: { unique: true, partialFilterExpression: { accountId: { $exists: true } }, name: 'unique_event_account' },
+    },
+    // "Which events is this team in?" for the team dashboard.
+    { key: { accountId: 1 }, options: { name: 'accountId_1' } },
     // Team login looks a team up by its code hash. "sparse" = teams without a
     // codeHash are left out of the index, so they don't clash with each other.
     { key: { codeHash: 1 }, options: { unique: true, sparse: true, name: 'unique_codeHash' } },
@@ -192,6 +238,19 @@ const indexes = {
   feedback: [
     // One feedback document per team per event. Re-generating REPLACES it (upsert).
     { key: { eventId: 1, teamId: 1 }, options: { unique: true, name: 'unique_event_team' } },
+  ],
+  teamAccounts: [
+    // The team code is how admins find a team, so it must be unique.
+    { key: { code: 1 }, options: { unique: true, name: 'unique_code' } },
+  ],
+  invitations: [
+    // At most ONE pending invitation per team per event (PARTIAL: old answered ones don't count).
+    {
+      key: { eventId: 1, accountId: 1 },
+      options: { unique: true, partialFilterExpression: { status: 'pending' }, name: 'unique_pending_invite' },
+    },
+    // The team dashboard's "pending invitations" query.
+    { key: { accountId: 1, status: 1 }, options: { name: 'accountId_1_status_1' } },
   ],
   admins: [
     // UNIQUE: no two organisers can register the same username (in any letter case).

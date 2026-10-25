@@ -8,7 +8,10 @@
 // Run: npm run setup-db   (once)   then   npm run seed
 
 const { connectDb, getDb, closeDb } = require('../src/db');
-const { sha256 } = require('../src/middleware/auth');
+const { sha256, hashPassword } = require('../src/middleware/auth');
+
+// Every seeded team account uses this password (sign in with the team code + this).
+const TEAM_PASSWORD = 'team1234';
 const { calculateTotal } = require('../src/services/scoring');
 const { recomputeLeaderboard } = require('../src/services/leaderboard');
 const { resetDemoEvent } = require('../src/services/demo');
@@ -23,13 +26,13 @@ const demoEvents = [
       { key: 'execution', label: 'Execution', max: 10, weight: 0.3 },
     ],
     teams: [
-      { name: 'Byte Bandits', members: ['Asha', 'Rohan'], code: 'TEAM001' },
-      { name: 'Null Pointers', members: ['Kabir', 'Meera', 'Dev'], code: 'TEAM002' },
-      { name: 'Query Queens', members: ['Isha', 'Zoya'], code: 'TEAM003' },
-      { name: 'Stack Smashers', members: ['Arjun', 'Neel'], code: 'TEAM004' },
-      { name: 'The Indexers', members: ['Priya', 'Sam', 'Tara'], code: 'TEAM005' },
+      { name: 'Byte Bandits', members: ['Asha', 'Rohan'], code: 'TM000001' },
+      { name: 'Null Pointers', members: ['Kabir', 'Meera', 'Dev'], code: 'TM000002' },
+      { name: 'Query Queens', members: ['Isha', 'Zoya'], code: 'TM000003' },
+      { name: 'Stack Smashers', members: ['Arjun', 'Neel'], code: 'TM000004' },
+      { name: 'The Indexers', members: ['Priya', 'Sam', 'Tara'], code: 'TM000005' },
     ],
-    // Plain codes are only in this demo script so you can log in. The DB stores hashes.
+    // Plain judge codes are only in this demo script so you can log in. The DB stores hashes.
     judges: [
       { name: 'Judge One', code: 'JUDGE001' },
       { name: 'Judge Two', code: 'JUDGE002' },
@@ -61,9 +64,9 @@ const demoEvents = [
       { key: 'pitch', label: 'Pitch', max: 5, weight: 0.5 },
     ],
     teams: [
-      { name: 'Green Route', members: ['Nina', 'Omar'], code: 'TEAM101' },
-      { name: 'MediTrack', members: ['Lea', 'Vik'], code: 'TEAM102' },
-      { name: 'StudyBuddy', members: ['Ana', 'Raj', 'Kim'], code: 'TEAM103' },
+      { name: 'Green Route', members: ['Nina', 'Omar'], code: 'TM000101' },
+      { name: 'MediTrack', members: ['Lea', 'Vik'], code: 'TM000102' },
+      { name: 'StudyBuddy', members: ['Ana', 'Raj', 'Kim'], code: 'TM000103' },
     ],
     judges: [
       { name: 'Prof. Rao', code: 'SPRING01' },
@@ -89,10 +92,12 @@ async function seedEvent(db, demo) {
   const old = await db.collection('events').findOne({ name: demo.name });
   if (old) {
     await db.collection('events').deleteOne({ _id: old._id });
-    for (const name of ['teams', 'judges', 'scores', 'leaderboard', 'feedback']) {
+    for (const name of ['teams', 'judges', 'scores', 'leaderboard', 'feedback', 'invitations']) {
       await db.collection(name).deleteMany({ eventId: old._id });
     }
   }
+  // Team accounts with these codes are re-created too.
+  await db.collection('teamAccounts').deleteMany({ code: { $in: demo.teams.map((t) => t.code) } });
 
   const { insertedId: eventId } = await db.collection('events').insertOne({
     name: demo.name,
@@ -102,9 +107,13 @@ async function seedEvent(db, demo) {
   });
 
   // insertMany returns insertedIds as { 0: id, 1: id, ... } in the same order.
-  const teamResult = await db
-    .collection('teams')
-    .insertMany(demo.teams.map((t) => ({ eventId, name: t.name, members: t.members, codeHash: sha256(t.code) })));
+  // Each team is a registered team account that has already accepted the invitation.
+  const accounts = await db.collection('teamAccounts').insertMany(
+    demo.teams.map((t) => ({ name: t.name, members: t.members, code: t.code, passwordHash: hashPassword(TEAM_PASSWORD), createdAt: new Date() }))
+  );
+  const teamResult = await db.collection('teams').insertMany(
+    demo.teams.map((t, i) => ({ eventId, accountId: accounts.insertedIds[i], name: t.name, members: t.members, joinedAt: new Date() }))
+  );
   const judgeResult = await db
     .collection('judges')
     .insertMany(demo.judges.map((j) => ({ eventId, name: j.name, codeHash: sha256(j.code) })));
@@ -133,7 +142,7 @@ async function seedEvent(db, demo) {
   console.log(`\n${demo.name}  [${demo.status}]  id=${eventId}`);
   console.log(`  ${demo.teams.length} teams, ${scoreDocs.length} scores`);
   console.log('  Judge codes:', demo.judges.map((j) => `${j.name} = ${j.code}`).join(', '));
-  console.log('  Team codes: ', demo.teams.map((t) => `${t.name} = ${t.code}`).join(', '));
+  console.log(`  Team codes (password "${TEAM_PASSWORD}"):`, demo.teams.map((t) => `${t.name} = ${t.code}`).join(', '));
 }
 
 async function main() {

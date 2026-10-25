@@ -213,6 +213,19 @@ tbody tr.selected td { background: var(--blue-soft); }
 .danger-card p { margin: 4px 0 0; font-size: 14px; color: var(--muted); }
 .control-row { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; justify-content: flex-end; }
 
+.nav-group { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.nav-label { padding: 0 14px 8px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crumbs a { color: var(--muted); text-decoration: none; }
+.crumbs a:hover { color: var(--blue-text); }
+.back-link { display: inline-block; margin-bottom: 10px; font-size: 13px; font-weight: 700; color: var(--blue-text); text-decoration: none; }
+.back-link:hover { text-decoration: underline; }
+.event-tabs { margin-bottom: 22px; }
+.event-tabs .tab { text-decoration: none; cursor: pointer; font-size: 14px; }
+.inline-form { display: flex; gap: 9px; flex-wrap: wrap; }
+.inline-form .text-input { flex: 1 1 200px; width: auto; }
+.nav-badge { margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--blue); color: #fff; font-size: 11px; font-weight: 800; display: grid; place-items: center; }
+.kpi-number.team-code { font-family: Consolas, monospace; font-size: 26px; letter-spacing: 0.06em; }
+.code-chip { font-family: Consolas, monospace; font-size: 11px; color: var(--muted); font-weight: 600; letter-spacing: 0.04em; }
 .event-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 18px; margin-bottom: 20px; }
 .event-bar .field-label { margin: 0; }
 .event-bar select { width: auto; min-width: 220px; max-width: 360px; padding: 9px 11px; }
@@ -260,6 +273,23 @@ tbody tr.selected td { background: var(--blue-soft); }
 .star { font-size: 15px; color: var(--star-off); }
 .star.full { color: var(--amber); }
 .star.half { background: linear-gradient(90deg, var(--amber) 50%, var(--star-off) 50%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.judge-layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 18px; align-items: start; }
+.team-steps { position: sticky; top: 90px; margin-bottom: 0; }
+.step-list { list-style: none; margin: 0; padding: 0; max-height: calc(100vh - 230px); overflow-y: auto; }
+.step-list button { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 10px; text-align: left; font-size: 13px; font-weight: 600; }
+.step-list button:hover { background: var(--blue-soft); }
+.step-list button.current { background: var(--blue-soft); color: var(--blue-text); box-shadow: inset 3px 0 var(--blue); }
+.step-num { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 800; background: var(--line-soft); color: var(--muted); flex: none; }
+.step-num.done { background: var(--green-soft); color: var(--green); }
+.step-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.step-total { font-size: 12px; color: var(--muted); font-weight: 700; }
+.score-card .step-counter { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--blue); margin: 0 0 6px; }
+.score-card.focus { padding: 26px; }
+.score-card.focus h3 { font-size: 24px; letter-spacing: -0.03em; }
+.nav-buttons { display: flex; gap: 9px; flex-wrap: wrap; }
+.done-card { text-align: center; padding: 46px 23px; }
+.done-card h2 { margin: 6px 0; font-size: 22px; }
+@media (max-width: 900px) { .judge-layout { grid-template-columns: 1fr; } .team-steps { position: static; } }
 .score-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 18px; }
 .score-card { padding: 21px; display: flex; flex-direction: column; }
 .score-card .section-head { margin-bottom: 4px; }

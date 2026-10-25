@@ -12,7 +12,7 @@
     try { if (localStorage.getItem('theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch (e) {}
   </script>
   <link rel="icon" type="image/png" href="img/favicon.png">
-  <link rel="stylesheet" href="css/app.css?v=14">
+  <link rel="stylesheet" href="css/app.css?v=15">
 </head>
 <body>
   <aside class="sidebar" aria-label="Primary sidebar">
@@ -23,26 +23,23 @@
     <nav aria-label="Main navigation" id="side-nav">
       <a class="nav-item" href="#overview" data-nav="overview">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-        <span>Overview</span>
+        <span>Dashboard</span>
       </a>
-      <a class="nav-item" href="#scores" data-nav="scores">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg>
-        <span>Judges' scores</span>
+      <a class="nav-item" href="#invitations" data-nav="invitations">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
+        <span>Invitations</span>
+        <span class="nav-badge hidden" id="invite-badge">0</span>
       </a>
-      <a class="nav-item" href="#feedback" data-nav="feedback">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-        <span>AI feedback</span>
-      </a>
-      <a class="nav-item" id="leaderboard-link" target="_blank">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 20V11m7 9V4m7 16v-7"/></svg>
-        <span>Leaderboard ↗</span>
-      </a>
+      <div class="nav-group" id="events-nav">
+        <div class="nav-label">My events</div>
+        <div id="events-nav-list"></div>
+      </div>
     </nav>
     <div class="side-foot">Team workspace</div>
   </aside>
 
   <header class="topbar">
-    <div class="crumbs"><span class="muted">My team</span><span class="muted">/</span><strong id="section-context">Overview</strong></div>
+    <div class="crumbs" id="crumbs"></div>
     <div class="top-actions">
       <span class="live-dot hidden" id="live-flag">Live updates</span>
       <button type="button" class="icon-button theme-toggle" aria-label="Switch between light and dark mode">
@@ -62,77 +59,154 @@
     </div>
   </header>
 
-  <main class="main" id="top">
+  <main class="main">
     <div id="demo-banner" class="banner hidden">⭐ <strong>Demo team.</strong> Your rank updates live while judges rate. Try the demo judge in another tab and watch it move.</div>
+    <div id="welcome-banner" class="banner info hidden">🎉 <strong>Your team is registered.</strong> Share your team code below with event organisers - they use it to invite you, and you accept here.</div>
 
-    <div class="page-heading">
-      <div>
-        <h1 id="team-name">Loading...</h1>
-        <div class="heading-meta"><span id="event-status"></span><span id="event-name"></span><span id="members"></span></div>
-      </div>
-    </div>
-
+    <!-- ===================== Dashboard ===================== -->
     <div data-view="overview">
-    <section class="kpis" aria-label="Your results">
-      <article class="card kpi">
-        <div class="kpi-top"><span>Current Rank</span><span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4v2a3 3 0 0 0 3 3m10-5h3v2a3 3 0 0 1-3 3"/></svg></span></div>
-        <div class="kpi-number" id="rank">-</div>
-        <p class="kpi-note" id="rank-note">Waiting for the first judge to score you.</p>
-      </article>
-      <article class="card kpi">
-        <div class="kpi-top"><span>Average Score</span><span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg></span></div>
-        <div class="kpi-number"><span id="avg">-</span><small> / 10</small></div>
-        <p class="kpi-note" id="team-stars"></p>
-      </article>
-      <article class="card kpi">
-        <div class="kpi-top"><span>Judges Scored</span><span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg></span></div>
-        <div class="kpi-number" id="judges">0</div>
-        <p class="kpi-note">Judges who have rated you</p>
-      </article>
-      <article class="card kpi">
-        <div class="kpi-top"><span>AI Feedback</span><span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span></div>
-        <div class="kpi-number" id="feedback-state">Locked</div>
-        <p class="kpi-note">Unlocks when the event ends</p>
-      </article>
-    </section>
-
-    <section class="card section-card">
-      <div class="section-head">
+      <div class="page-heading">
         <div>
-          <h2>Score by criterion</h2>
-          <p class="section-sub">Average across all judges</p>
+          <h1 id="team-name">Loading...</h1>
+          <p id="team-members"></p>
         </div>
       </div>
-      <div id="breakdown"></div>
-    </section>
+
+      <section class="kpis" aria-label="Your team">
+        <article class="card kpi">
+          <div class="kpi-top"><span>Team Code</span><span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 9.2-9.2M17 6l3 3M14.5 8.5l2 2"/></svg></span></div>
+          <div class="kpi-number team-code" id="team-code">-</div>
+          <p class="kpi-note"><button type="button" class="tiny-button" id="copy-code">Copy</button> Never expires - give it to organisers</p>
+        </article>
+        <article class="card kpi">
+          <div class="kpi-top"><span>Events Joined</span><span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 2v6m10-6v6M3 11h18"/></svg></span></div>
+          <div class="kpi-number" id="kpi-events">0</div>
+          <p class="kpi-note">Events your team takes part in</p>
+        </article>
+        <article class="card kpi">
+          <div class="kpi-top"><span>Best Rank</span><span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4v2a3 3 0 0 0 3 3m10-5h3v2a3 3 0 0 1-3 3"/></svg></span></div>
+          <div class="kpi-number" id="kpi-best">-</div>
+          <p class="kpi-note">Across all your events</p>
+        </article>
+        <article class="card kpi">
+          <div class="kpi-top"><span>Invitations</span><span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></span></div>
+          <div class="kpi-number" id="kpi-invites">0</div>
+          <p class="kpi-note">Waiting for your answer</p>
+        </article>
+      </section>
+
+      <section class="card section-card">
+        <div class="section-head">
+          <div>
+            <h2>Your events</h2>
+            <p class="section-sub">Events you accepted. Open one to see judges' scores, your rank and AI feedback.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="table-wide">
+            <thead><tr><th scope="col">Event</th><th scope="col">Status</th><th scope="col">Your rank</th><th scope="col">Average</th><th scope="col">Actions</th></tr></thead>
+            <tbody id="event-rows"></tbody>
+          </table>
+        </div>
+        <p id="no-events" class="empty-row hidden">No events yet. When an organiser invites your team, the invitation pops up here.</p>
+      </section>
     </div>
 
-    <div data-view="feedback" class="hidden">
-    <section class="card section-card">
-      <div class="section-head">
+    <!-- ===================== Invitations ===================== -->
+    <div data-view="invitations" class="hidden">
+      <div class="page-heading">
         <div>
-          <h2>AI feedback</h2>
-          <p class="section-sub">One review compiled by AI from every judge's comments</p>
+          <h1>Invitations</h1>
+          <p>Organisers who want to add your team to their event. Your team joins only if you accept.</p>
         </div>
       </div>
-      <div id="feedback"></div>
-    </section>
+      <section class="card section-card">
+        <div id="invite-list"></div>
+      </section>
     </div>
 
-    <div data-view="scores" class="hidden">
-    <section class="card section-card">
-      <div class="section-head">
+    <!-- ===================== One event ===================== -->
+    <div data-view="event" class="hidden">
+      <a class="back-link" href="#overview">← All my events</a>
+      <div class="page-heading">
         <div>
-          <h2>Judges' scores</h2>
-          <p class="section-sub">Every judge's marks and comments</p>
+          <h1 id="event-name"></h1>
+          <div class="heading-meta"><span id="event-status"></span><span id="event-team"></span></div>
         </div>
+        <a class="secondary" id="leaderboard-link" target="_blank">Leaderboard ↗</a>
       </div>
-      <div class="table-wrap"><table id="judge-scores"></table></div>
-    </section>
+
+      <section class="kpis" aria-label="Your results">
+        <article class="card kpi">
+          <div class="kpi-top"><span>Current Rank</span><span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4v2a3 3 0 0 0 3 3m10-5h3v2a3 3 0 0 1-3 3"/></svg></span></div>
+          <div class="kpi-number" id="rank">-</div>
+          <p class="kpi-note" id="rank-note">Waiting for the first judge to score you.</p>
+        </article>
+        <article class="card kpi">
+          <div class="kpi-top"><span>Average Score</span><span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg></span></div>
+          <div class="kpi-number"><span id="avg">-</span><small> / 10</small></div>
+          <p class="kpi-note" id="team-stars"></p>
+        </article>
+        <article class="card kpi">
+          <div class="kpi-top"><span>Judges Scored</span><span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg></span></div>
+          <div class="kpi-number" id="judges">0</div>
+          <p class="kpi-note">Judges who have rated you</p>
+        </article>
+        <article class="card kpi">
+          <div class="kpi-top"><span>AI Feedback</span><span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span></div>
+          <div class="kpi-number" id="feedback-state">Locked</div>
+          <p class="kpi-note">Unlocks when the event ends</p>
+        </article>
+      </section>
+
+      <div class="detail-grid">
+        <article class="card detail-card">
+          <div class="section-head">
+            <div>
+              <h3>Score by criterion</h3>
+              <p class="section-sub">Average across all judges</p>
+            </div>
+          </div>
+          <div id="breakdown"></div>
+        </article>
+        <article class="card detail-card">
+          <div class="section-head">
+            <div>
+              <h3>AI feedback</h3>
+              <p class="section-sub">One review compiled by AI from every judge's comments</p>
+            </div>
+          </div>
+          <div id="feedback"></div>
+        </article>
+      </div>
+
+      <section class="card section-card" style="margin-top:18px">
+        <div class="section-head">
+          <div>
+            <h2>Judges' scores</h2>
+            <p class="section-sub">Every judge's marks and comments</p>
+          </div>
+        </div>
+        <div class="table-wrap"><table id="judge-scores"></table></div>
+      </section>
     </div>
   </main>
 
-  <script src="js/common.js?v=14"></script>
-  <script src="js/team.js?v=14"></script>
+  <!-- Invitation pop-up -->
+  <div id="invite-modal" class="modal-backdrop hidden" role="presentation">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="invite-title">
+      <p class="eyebrow">Invitation <span id="invite-step"></span></p>
+      <h2 id="invite-title"></h2>
+      <p id="invite-text"></p>
+      <div class="modal-actions">
+        <button type="button" class="secondary" id="invite-later">Decide later</button>
+        <button type="button" class="danger-button" id="invite-decline">Decline</button>
+        <button type="button" class="primary" id="invite-accept">Accept &amp; join</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/common.js?v=15"></script>
+  <script src="js/team.js?v=15"></script>
 </body>
 </html>

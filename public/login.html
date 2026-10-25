@@ -12,7 +12,7 @@
     try { if (localStorage.getItem('theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch (e) {}
   </script>
   <link rel="icon" type="image/png" href="img/favicon.png">
-  <link rel="stylesheet" href="css/style.css?v=14">
+  <link rel="stylesheet" href="css/style.css?v=15">
 </head>
 <body>
   <main class="login2">
@@ -58,6 +58,14 @@
             <input id="username" autocomplete="username" placeholder="Enter your username">
           </div>
         </div>
+        <!-- Only shown when a team registers -->
+        <div id="members-block" class="hidden">
+          <label class="lbl" for="members">Team members <span class="muted">(comma separated)</span></label>
+          <div class="input-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.4 3.3-5.5 6.5-5.5s5.9 2.1 6.5 5.5"/><path d="M15.5 4.8a3.3 3.3 0 0 1 0 6.4M18 14.8c2 .8 3.2 2.6 3.5 5.2"/></svg>
+            <input id="members" autocomplete="off" placeholder="Asha, Rohan">
+          </div>
+        </div>
         <label class="lbl" for="secret" id="secret-label">Team access code</label>
         <div class="input-icon">
           <!-- key icon (codes) / lock icon (password) - swapped by login.js -->
@@ -98,7 +106,7 @@
     </div>
   </main>
 
-  <script src="js/common.js?v=14"></script>
-  <script src="js/login.js?v=14"></script>
+  <script src="js/common.js?v=15"></script>
+  <script src="js/login.js?v=15"></script>
 </body>
 </html>

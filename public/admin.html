@@ -12,7 +12,7 @@
     try { if (localStorage.getItem('theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch (e) {}
   </script>
   <link rel="icon" type="image/png" href="img/favicon.png">
-  <link rel="stylesheet" href="css/app.css?v=14">
+  <link rel="stylesheet" href="css/app.css?v=15">
 </head>
 <body>
   <aside class="sidebar" aria-label="Primary sidebar">
@@ -23,34 +23,39 @@
     <nav aria-label="Main navigation" id="side-nav">
       <a class="nav-item" href="#overview" data-nav="overview">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-        <span>Overview</span>
+        <span>Dashboard</span>
       </a>
       <a class="nav-item" href="#events" data-nav="events">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 2v6m10-6v6M3 11h18"/></svg>
         <span>Events</span>
       </a>
-      <a class="nav-item" href="#teams" data-nav="teams">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M17 5a3 3 0 0 1 0 6m2 4a5 5 0 0 1 2 4v1"/></svg>
-        <span>Teams</span>
-      </a>
-      <a class="nav-item" href="#judges" data-nav="judges">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg>
-        <span>Judges</span>
-      </a>
-      <a class="nav-item" href="#rankings" data-nav="rankings">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 20V11m7 9V4m7 16v-7"/></svg>
-        <span>Rankings &amp; Feedback</span>
-      </a>
-      <a class="nav-item" href="#settings" data-nav="settings">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M19 5l-2 2M7 17l-2 2"/></svg>
-        <span>Settings</span>
-      </a>
+
+      <!-- Shown while you are inside one event -->
+      <div id="event-nav" class="nav-group hidden">
+        <div class="nav-label" id="event-nav-name">Event</div>
+        <a class="nav-item" data-nav="teams" id="nav-teams">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M17 5a3 3 0 0 1 0 6m2 4a5 5 0 0 1 2 4v1"/></svg>
+          <span>Teams</span>
+        </a>
+        <a class="nav-item" data-nav="judges" id="nav-judges">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg>
+          <span>Judges</span>
+        </a>
+        <a class="nav-item" data-nav="rankings" id="nav-rankings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 20V11m7 9V4m7 16v-7"/></svg>
+          <span>Rankings &amp; Feedback</span>
+        </a>
+        <a class="nav-item" data-nav="settings" id="nav-settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M19 5l-2 2M7 17l-2 2"/></svg>
+          <span>Event settings</span>
+        </a>
+      </div>
     </nav>
     <div class="side-foot">Admin workspace</div>
   </aside>
 
   <header class="topbar">
-    <div class="crumbs"><span class="muted">Workspace</span><span class="muted">/</span><strong id="section-context">Overview</strong></div>
+    <div class="crumbs" id="crumbs"></div>
     <div class="top-actions">
       <label class="search-top" for="global-search"><span aria-hidden="true">⌕</span><input id="global-search" aria-label="Search events" placeholder="Search events"></label>
       <button type="button" class="icon-button theme-toggle" aria-label="Switch between light and dark mode">
@@ -64,7 +69,6 @@
           <span aria-hidden="true" class="muted">⌄</span>
         </button>
         <span class="overflow-menu hidden" id="account-menu">
-          <a href="#settings">Settings</a>
           <a href="leaderboard.html" target="_blank">Public leaderboards ↗</a>
           <button type="button" id="logout-btn" class="danger">Log out</button>
         </span>
@@ -75,7 +79,8 @@
   <main class="main">
     <div id="demo-banner" class="banner hidden">⭐ <strong>Demo admin.</strong> You are managing a shared sample event. Your real events are hidden, and creating or deleting events is turned off.</div>
 
-    <div class="page-heading">
+    <!-- Heading of the two top-level pages -->
+    <div class="page-heading" id="main-heading">
       <div>
         <h1 id="page-title">Administrator Dashboard</h1>
         <p id="page-desc">Monitor events, teams, judging progress, and feedback in one place.</p>
@@ -83,23 +88,25 @@
       <button type="button" id="create-event" class="primary"><span aria-hidden="true">＋</span>Create Event</button>
     </div>
 
-    <!-- Event picker: shown on the pages that work on one event -->
-    <div id="event-bar" class="card event-bar hidden">
-      <label for="event-picker" class="field-label">Event</label>
-      <select id="event-picker" class="text-input"></select>
-      <span id="selected-status" class="pill draft"></span>
-      <span class="muted small" id="selected-rubric"></span>
-      <a class="secondary" id="leaderboard-link" target="_blank">Leaderboard ↗</a>
+    <!-- Heading inside one event: name, status, rubric and the event's own tabs -->
+    <div id="event-heading" class="hidden">
+      <a class="back-link" href="#events">← All events</a>
+      <div class="page-heading" style="margin-bottom:14px">
+        <div>
+          <h1 id="event-title"></h1>
+          <div class="heading-meta"><span id="event-status"></span><span id="event-rubric"></span></div>
+        </div>
+        <a class="secondary" id="leaderboard-link" target="_blank">Public leaderboard ↗</a>
+      </div>
+      <div class="tabs event-tabs" role="tablist" aria-label="Event pages">
+        <a class="tab" data-tab="teams">Teams</a>
+        <a class="tab" data-tab="judges">Judges</a>
+        <a class="tab" data-tab="rankings">Rankings &amp; Feedback</a>
+        <a class="tab" data-tab="settings">Event settings</a>
+      </div>
     </div>
 
-    <!-- Event pages with no event yet -->
-    <section id="no-event" class="card section-card empty-state hidden">
-      <h2>No event yet</h2>
-      <p class="muted">Create your first event to add teams and judges.</p>
-      <button type="button" class="primary" id="no-event-create">＋ Create Event</button>
-    </section>
-
-    <!-- ===================== Overview ===================== -->
+    <!-- ===================== Dashboard ===================== -->
     <div data-view="overview">
       <section class="kpis" aria-label="Dashboard statistics">
         <article class="card kpi">
@@ -128,7 +135,7 @@
         <div class="section-head">
           <div>
             <h2>Recent events</h2>
-            <p class="section-sub">Your latest events and how far judging has got.</p>
+            <p class="section-sub">Open an event to add judges, invite teams and see results.</p>
           </div>
           <a class="secondary" href="#events">View all events</a>
         </div>
@@ -148,15 +155,15 @@
         <div class="section-head">
           <div>
             <h2 id="events-title">Event management</h2>
-            <p class="section-sub">Track event status and scoring at a glance.</p>
+            <p class="section-sub">Track event status and scoring at a glance. Open an event to manage it.</p>
           </div>
         </div>
         <div class="table-tools">
           <div class="tabs" role="tablist" aria-label="Filter events">
-            <button type="button" role="tab" aria-selected="true" class="tab active" data-filter="all">All</button>
-            <button type="button" role="tab" aria-selected="false" class="tab" data-filter="draft">Draft</button>
-            <button type="button" role="tab" aria-selected="false" class="tab" data-filter="live">Live</button>
-            <button type="button" role="tab" aria-selected="false" class="tab" data-filter="closed">Closed</button>
+            <button type="button" role="tab" aria-selected="true" class="tab filter-tab active" data-filter="all">All</button>
+            <button type="button" role="tab" aria-selected="false" class="tab filter-tab" data-filter="draft">Draft</button>
+            <button type="button" role="tab" aria-selected="false" class="tab filter-tab" data-filter="live">Live</button>
+            <button type="button" role="tab" aria-selected="false" class="tab filter-tab" data-filter="closed">Closed</button>
           </div>
           <input id="event-search" class="filter-input" aria-label="Filter events by name" placeholder="⌕  Search events">
         </div>
@@ -170,53 +177,81 @@
       </section>
     </div>
 
-    <!-- ===================== Teams ===================== -->
-    <div data-view="teams" class="hidden" data-needs-event>
+    <!-- ===================== Event: Teams ===================== -->
+    <div data-view="teams" class="hidden">
       <div class="detail-grid">
         <article class="card detail-card">
-          <div class="section-head"><h3>Team roster</h3><span id="team-count" class="count">0 teams</span></div>
+          <div class="section-head"><h3>Teams in this event</h3><span id="team-count" class="count">0 teams</span></div>
           <ul id="team-list" class="person-list tall"></ul>
           <div class="action-row">
-            <label class="secondary" for="import-file">Import from Excel</label>
-            <input type="file" id="import-file" class="hidden" accept=".xlsx,.xls,.csv">
-            <button type="button" id="export-btn" class="secondary">Export</button>
-            <button type="button" id="template-btn" class="secondary">Template</button>
-            <button type="button" id="add-team" class="secondary">Add Team</button>
+            <button type="button" id="export-btn" class="secondary">Export to Excel</button>
           </div>
         </article>
-        <article class="card detail-card">
-          <div class="section-head">
-            <div>
-              <h3>Team access codes</h3>
-              <p class="section-sub">Each team signs in on the Student tab with its code. Only a hash is stored, so a code is shown once.</p>
+
+        <div>
+          <article class="card detail-card">
+            <div class="section-head">
+              <div>
+                <h3>Invite a team</h3>
+                <p class="section-sub">Teams register on ScoreStream and get a permanent team code. Enter it here: the team joins only after it accepts your invitation.</p>
+              </div>
             </div>
-          </div>
-          <div data-codes="team"></div>
-        </article>
+            <form id="invite-form" class="inline-form">
+              <input id="invite-code" class="text-input" required maxlength="20" placeholder="Team code, e.g. TM7K4Q2X" aria-label="Team code">
+              <button type="submit" class="primary">Send invite</button>
+            </form>
+            <div class="action-row" style="margin-top:14px">
+              <label class="secondary" for="import-file">Invite from Excel</label>
+              <input type="file" id="import-file" class="hidden" accept=".xlsx,.xls,.csv">
+              <button type="button" id="template-btn" class="secondary">Template</button>
+            </div>
+          </article>
+
+          <article class="card detail-card" style="margin-top:18px">
+            <div class="section-head"><h3>Waiting for the team to accept</h3><span id="invite-count" class="count">0</span></div>
+            <ul id="invite-list" class="person-list"></ul>
+          </article>
+        </div>
       </div>
     </div>
 
-    <!-- ===================== Judges ===================== -->
-    <div data-view="judges" class="hidden" data-needs-event>
+    <!-- ===================== Event: Judges ===================== -->
+    <div data-view="judges" class="hidden">
       <div class="detail-grid">
         <article class="card detail-card">
-          <div class="section-head"><h3>Judge roster</h3><span id="judge-count" class="count">0 judges</span></div>
+          <div class="section-head"><h3>Judges</h3><span id="judge-count" class="count">0 judges</span></div>
           <ul id="judge-list" class="person-list tall"></ul>
-          <button type="button" id="add-judge" class="secondary">Add Judge</button>
         </article>
-        <article class="card detail-card">
-          <div class="section-head">
-            <div>
-              <h3>Judge access codes</h3>
-              <p class="section-sub">Judges sign in on the Judge tab with their name + code. Only a hash is stored, so a code is shown once.</p>
+
+        <div>
+          <article class="card detail-card">
+            <div class="section-head">
+              <div>
+                <h3>Add a judge</h3>
+                <p class="section-sub">A unique code is generated. The judge signs in with this name + the code. Codes expire when you end the event.</p>
+              </div>
             </div>
-          </div>
-          <div data-codes="judge"></div>
-        </article>
+            <form id="judge-form" class="inline-form">
+              <input id="judge-name" class="text-input" required maxlength="100" placeholder="Judge name, e.g. Prof. Rao" aria-label="Judge name">
+              <button type="submit" class="primary">Add judge</button>
+            </form>
+          </article>
+
+          <article class="card detail-card" style="margin-top:18px">
+            <div class="section-head">
+              <div>
+                <h3>New judge codes</h3>
+                <p class="section-sub">Only a hash is stored, so each code is shown once. Copy or download them now.</p>
+              </div>
+            </div>
+            <div id="code-list"></div>
+          </article>
+        </div>
+
         <article class="card detail-card span-2">
           <div class="section-head">
             <div>
-              <h3>Judge scores</h3>
+              <h3>Judging progress</h3>
               <p class="section-sub">How many teams each judge has scored</p>
             </div>
           </div>
@@ -225,14 +260,14 @@
       </div>
     </div>
 
-    <!-- ===================== Rankings & Feedback ===================== -->
-    <div data-view="rankings" class="hidden" data-needs-event>
+    <!-- ===================== Event: Rankings & Feedback ===================== -->
+    <div data-view="rankings" class="hidden">
       <div class="detail-grid">
         <article class="card detail-card">
           <div class="section-head">
             <div>
               <h3>Live rankings</h3>
-              <p class="section-sub">Current standings from submitted scores</p>
+              <p class="section-sub">Average of all judges' totals</p>
             </div>
             <span class="live-dot hidden" id="live-flag">Live</span>
           </div>
@@ -241,12 +276,12 @@
         <article class="card detail-card">
           <div class="section-head">
             <div>
-              <h3>Individual feedback</h3>
+              <h3>AI feedback</h3>
               <p class="section-sub" id="feedback-note">Written by AI for every team when you end the event.</p>
             </div>
           </div>
           <div id="feedback-list" class="feedback-scroll"></div>
-          <button type="button" id="generate-feedback" class="secondary">Regenerate Feedback</button>
+          <button type="button" id="generate-feedback" class="secondary">Regenerate feedback</button>
         </article>
       </div>
       <section class="card section-card" style="margin-top:18px">
@@ -260,8 +295,8 @@
       </section>
     </div>
 
-    <!-- ===================== Settings ===================== -->
-    <div data-view="settings" class="hidden" data-needs-event>
+    <!-- ===================== Event: Settings ===================== -->
+    <div data-view="settings" class="hidden">
       <div class="detail-grid">
         <article class="card detail-card">
           <div class="section-head">
@@ -273,7 +308,6 @@
           <div class="seg" role="group" aria-label="Event status">
             <button type="button" id="set-draft">Draft</button>
             <button type="button" id="set-live">Live</button>
-            <button type="button" id="set-closed">Closed</button>
           </div>
         </article>
         <article class="card detail-card">
@@ -285,25 +319,22 @@
           </div>
           <div id="rubric-list"></div>
         </article>
-        <article class="card detail-card">
-          <div class="section-head">
-            <div>
-              <h3>Your account</h3>
-              <p class="section-sub">You only see the events you created.</p>
-            </div>
-          </div>
-          <div class="score-row"><span class="score-label">Signed in as</span><strong id="account-name"></strong></div>
-          <div class="score-row"><span class="score-label">Role</span><span class="score-status">Administrator</span></div>
-          <button type="button" class="secondary" id="logout-btn-2" style="margin-top:12px">Log out</button>
-        </article>
       </div>
       <div class="danger-card">
         <div>
-          <h3>Event controls</h3>
-          <p>Ending an event closes scoring, publishes final ranks and writes AI feedback. Deleting removes everything.</p>
+          <h3>End event</h3>
+          <p id="end-text">Closes scoring, publishes the final ranking, writes AI feedback for every team and expires every judge code.</p>
         </div>
         <div class="control-row">
           <button type="button" class="danger-button" id="end-event">End Event</button>
+        </div>
+      </div>
+      <div class="danger-card" id="delete-card">
+        <div>
+          <h3>Delete event</h3>
+          <p>Removes the event with all its judges, scores and feedback. Team accounts are kept.</p>
+        </div>
+        <div class="control-row">
           <button type="button" class="danger-button" id="delete-event">Delete event</button>
         </div>
       </div>
@@ -325,7 +356,7 @@
     </div>
   </div>
 
-  <script src="js/common.js?v=14"></script>
-  <script src="js/admin.js?v=14"></script>
+  <script src="js/common.js?v=15"></script>
+  <script src="js/admin.js?v=15"></script>
 </body>
 </html>

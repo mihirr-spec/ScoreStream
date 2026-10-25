@@ -118,6 +118,10 @@ router.patch('/events/:id', requireAdmin, async (req, res) => {
   // Any status change also refreshes the ranking, so it can never stay out of date.
   if (changes.status) await recomputeLeaderboard(eventId);
   if (changes.status === 'closed') {
+    // Ending the event expires every judge code of this event (and ends their sessions).
+    await db.collection('judges').updateMany({ eventId, expiredAt: { $exists: false } }, { $set: { expiredAt: new Date() } });
+    // Invitations nobody answered can't be accepted any more.
+    await db.collection('invitations').deleteMany({ eventId, status: 'pending' });
     generateEventFeedback(eventId).catch((err) => console.error(`[feedback] event ${eventId}: ${err.message}`));
   }
   res.json(updated);
@@ -134,7 +138,7 @@ router.delete('/events/:id', requireAdmin, async (req, res) => {
   const result = await db.collection('events').deleteOne({ _id: eventId });
   if (result.deletedCount === 0) throw httpError(404, 'Event not found');
 
-  for (const name of ['teams', 'judges', 'scores', 'leaderboard', 'feedback']) {
+  for (const name of ['teams', 'judges', 'scores', 'leaderboard', 'feedback', 'invitations']) {
     await db.collection(name).deleteMany({ eventId });
   }
   res.json({ message: 'Event and all its data deleted' });

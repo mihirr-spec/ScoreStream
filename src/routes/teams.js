@@ -1,208 +1,118 @@
-// Teams. Admin creates and manages them; a logged-in team can view its own results.
-// Each team REFERENCES its event by eventId.
+// Teams. A team REGISTERS its own account (see routes/auth.js) and joins an event only
+// by accepting an admin's invitation (see routes/invitations.js). A document in the
+// "teams" collection is one team's place in one event: scores, the leaderboard and
+// feedback all point at it.
 
 const express = require('express');
 const { getDb } = require('../db');
-const { requireAdmin, assertEventAccess, requireTeam, sha256, generateCode } = require('../middleware/auth');
-const { httpError, parseId, isNonEmptyString, cleanMembers, cleanCode, CODE_RULE } = require('../middleware/validate');
+const { requireAdmin, assertEventAccess, requireTeam } = require('../middleware/auth');
+const { httpError, parseId } = require('../middleware/validate');
 
 const router = express.Router();
 
-// The code hash is secret, so never send it to any browser.
+// The old-style code hash is secret, so never send it to any browser.
 const HIDE_CODE = { projection: { codeHash: 0 } };
 
-// Loads a team by id and checks this admin may manage its event.
-async function findTeamForAdmin(req, teamId) {
-  const team = await getDb().collection('teams').findOne({ _id: teamId }, HIDE_CODE);
-  if (!team) throw httpError(404, 'Team not found');
-  await assertEventAccess(req, team.eventId);
-  return team;
-}
-
-// GET /api/events/:eventId/teams
+// GET /api/events/:eventId/teams  -> the teams in an event, each with its team code
 router.get('/events/:eventId/teams', requireAdmin, async (req, res) => {
   const eventId = parseId(req.params.eventId, 'event id');
   await assertEventAccess(req, eventId);
-  // Uses the { eventId: 1 } index on teams.
-  const teams = await getDb().collection('teams').find({ eventId }, HIDE_CODE).sort({ name: 1 }).toArray();
+  // Uses the { eventId: 1 } index on teams; $lookup adds the team code from teamAccounts.
+  const teams = await getDb()
+    .collection('teams')
+    .aggregate([
+      { $match: { eventId } },
+      { $sort: { name: 1 } },
+      { $lookup: { from: 'teamAccounts', localField: 'accountId', foreignField: '_id', as: 'account' } },
+      { $set: { code: { $first: '$account.code' } } },
+      { $project: { account: 0, codeHash: 0 } },
+    ])
+    .toArray();
   res.json(teams);
 });
 
-// POST /api/events/:eventId/teams  { name, members: [String], code? }
-router.post('/events/:eventId/teams', requireAdmin, async (req, res) => {
-  const db = getDb();
-  const eventId = parseId(req.params.eventId, 'event id');
-  await assertEventAccess(req, eventId);
-  const { name, members, code: chosenCode } = req.body || {};
-
-  if (!isNonEmptyString(name, 100)) throw httpError(400, 'name is required (max 100 characters)');
-  const cleanedMembers = cleanMembers(members);
-  if (cleanedMembers === null) throw httpError(400, 'members must be a list of up to 20 names');
-  const customCode = cleanCode(chosenCode);
-  if (customCode === null) throw httpError(400, CODE_RULE);
-
-  const event = await db.collection('events').findOne({ _id: eventId });
-  if (!event) throw httpError(404, 'Event not found');
-
-  // Like judges, each team gets an access code (chosen or random). Only its hash is stored.
-  const code = customCode || generateCode();
-  const team = { eventId, name: name.trim(), members: cleanedMembers, codeHash: sha256(code) };
-  let result;
-  try {
-    result = await db.collection('teams').insertOne(team);
-  } catch (err) {
-    if (err.code === 11000) throw httpError(409, 'That code is already in use - choose a different one');
-    throw err;
-  }
-  res.status(201).json({
-    _id: result.insertedId,
-    eventId,
-    name: team.name,
-    members: team.members,
-    code,
-    message: 'Save this code now - it will not be shown again',
-  });
-});
-
-// POST /api/events/:eventId/teams/import  { teams: [{ name, members?, code? }] }
-// Bulk import, e.g. from an Excel sheet (the browser reads the file and sends the rows).
-// All valid rows are saved with ONE insertMany. Rows whose team name already exists in
-// this event are skipped, so importing the same sheet twice does not create duplicates.
-// Returns each new team's plain code ONCE, so the admin can download them.
-const MAX_IMPORT = 500;
-router.post('/events/:eventId/teams/import', requireAdmin, async (req, res) => {
-  const db = getDb();
-  const eventId = parseId(req.params.eventId, 'event id');
-  await assertEventAccess(req, eventId);
-  const { teams } = req.body || {};
-  if (!Array.isArray(teams) || teams.length === 0) throw httpError(400, 'teams must be a non-empty list');
-  if (teams.length > MAX_IMPORT) throw httpError(400, `You can import at most ${MAX_IMPORT} teams at once`);
-
-  const event = await db.collection('events').findOne({ _id: eventId });
-  if (!event) throw httpError(404, 'Event not found');
-
-  // Names already in this event (lower case, so "Byte Bandits" = "byte bandits").
-  const existing = await db.collection('teams').find({ eventId }, { projection: { name: 1 } }).toArray();
-  const seenNames = new Set(existing.map((t) => t.name.toLowerCase()));
-  const seenCodes = new Set();
-
-  const toInsert = [];
-  const codes = [];
-  const skipped = [];
-  teams.forEach((row, i) => {
-    const rowNo = i + 1;
-    const name = row && typeof row.name === 'string' ? row.name.trim() : '';
-    if (!isNonEmptyString(name, 100)) return skipped.push({ row: rowNo, name, reason: 'missing team name' });
-    if (seenNames.has(name.toLowerCase())) return skipped.push({ row: rowNo, name, reason: 'team already exists' });
-    const members = cleanMembers(row.members);
-    if (members === null) return skipped.push({ row: rowNo, name, reason: 'members must be up to 20 names' });
-    const customCode = cleanCode(row.code);
-    if (customCode === null) return skipped.push({ row: rowNo, name, reason: CODE_RULE });
-    if (customCode && seenCodes.has(customCode)) return skipped.push({ row: rowNo, name, reason: 'code used twice in the sheet' });
-
-    const code = customCode || generateCode();
-    seenNames.add(name.toLowerCase());
-    seenCodes.add(code);
-    toInsert.push({ eventId, name, members, codeHash: sha256(code) });
-    codes.push(code);
-  });
-
-  // A chosen code might already belong to another team (in any event).
-  if (toInsert.length > 0) {
-    const taken = await db
-      .collection('teams')
-      .find({ codeHash: { $in: toInsert.map((t) => t.codeHash) } }, { projection: { codeHash: 1 } })
-      .toArray();
-    const takenHashes = new Set(taken.map((t) => t.codeHash));
-    for (let i = toInsert.length - 1; i >= 0; i--) {
-      if (takenHashes.has(toInsert[i].codeHash)) {
-        skipped.push({ name: toInsert[i].name, reason: 'code already in use' });
-        toInsert.splice(i, 1);
-        codes.splice(i, 1);
-      }
-    }
-  }
-
-  let created = [];
-  if (toInsert.length > 0) {
-    const result = await db.collection('teams').insertMany(toInsert);
-    created = toInsert.map((t, i) => ({ _id: result.insertedIds[i], name: t.name, members: t.members, code: codes[i] }));
-  }
-  res.status(201).json({
-    imported: created.length,
-    skipped,
-    teams: created,
-    message: 'Save these codes now - they will not be shown again',
-  });
-});
-
-// POST /api/teams/:id/reset-code  -> new code (the old one stops working), shown ONCE
-router.post('/teams/:id/reset-code', requireAdmin, async (req, res) => {
-  const teamId = parseId(req.params.id, 'team id');
-  await findTeamForAdmin(req, teamId);
-  const code = generateCode();
-  const team = await getDb()
-    .collection('teams')
-    .findOneAndUpdate({ _id: teamId }, { $set: { codeHash: sha256(code) } }, { returnDocument: 'after', ...HIDE_CODE });
-  if (!team) throw httpError(404, 'Team not found');
-  res.json({ _id: team._id, name: team.name, code, message: 'Save this code now - it will not be shown again' });
-});
-
-// PATCH /api/teams/:id  { name?, members? }
-router.patch('/teams/:id', requireAdmin, async (req, res) => {
-  const teamId = parseId(req.params.id, 'team id');
-  await findTeamForAdmin(req, teamId);
-  const { name, members } = req.body || {};
-  const changes = {};
-
-  if (name !== undefined) {
-    if (!isNonEmptyString(name, 100)) throw httpError(400, 'name must be 1-100 characters');
-    changes.name = name.trim();
-  }
-  if (members !== undefined) {
-    const cleanedMembers = cleanMembers(members);
-    if (cleanedMembers === null) throw httpError(400, 'members must be a list of up to 20 names');
-    changes.members = cleanedMembers;
-  }
-  if (Object.keys(changes).length === 0) throw httpError(400, 'Send name and/or members to update');
-
-  const db = getDb();
-  const updated = await db
-    .collection('teams')
-    .findOneAndUpdate({ _id: teamId }, { $set: changes }, { returnDocument: 'after', ...HIDE_CODE });
-  if (!updated) throw httpError(404, 'Team not found');
-
-  // The leaderboard keeps a copy of the team name, so update that copy too.
-  if (changes.name) {
-    await db.collection('leaderboard').updateMany({ teamId }, { $set: { teamName: changes.name } });
-  }
-  res.json(updated);
-});
-
-// DELETE /api/teams/:id  -> also removes the team's scores, leaderboard row and feedback.
+// DELETE /api/teams/:id  -> removes the team from its event, with its scores,
+// leaderboard row and feedback. The team ACCOUNT stays (it may be in other events).
 router.delete('/teams/:id', requireAdmin, async (req, res) => {
   const db = getDb();
   const teamId = parseId(req.params.id, 'team id');
-  await findTeamForAdmin(req, teamId);
+  const team = await db.collection('teams').findOne({ _id: teamId }, HIDE_CODE);
+  if (!team) throw httpError(404, 'Team not found');
+  await assertEventAccess(req, team.eventId);
 
-  const result = await db.collection('teams').deleteOne({ _id: teamId });
-  if (result.deletedCount === 0) throw httpError(404, 'Team not found');
-
+  await db.collection('teams').deleteOne({ _id: teamId });
   // Deleting scores fires the Change Stream, which re-ranks the remaining teams.
   await db.collection('scores').deleteMany({ teamId });
   await db.collection('leaderboard').deleteMany({ teamId });
   await db.collection('feedback').deleteMany({ teamId });
-  res.json({ message: 'Team deleted' });
+  res.json({ message: 'Team removed from the event' });
 });
 
-// GET /api/team/me  -> everything the team page needs
+// GET /api/team/me  -> the team account, the events it is in, and pending invitations
 router.get('/team/me', requireTeam, async (req, res) => {
   const db = getDb();
-  const team = req.team;
+  const account = req.teamAccount;
+
+  // One row per event this team takes part in, with its rank there (if scored).
+  const events = await db
+    .collection('teams')
+    .aggregate([
+      { $match: { accountId: account._id } },
+      { $lookup: { from: 'events', localField: 'eventId', foreignField: '_id', as: 'event' } },
+      { $unwind: '$event' },
+      {
+        $lookup: {
+          from: 'leaderboard',
+          let: { eventId: '$eventId', teamId: '$_id' },
+          pipeline: [{ $match: { $expr: { $and: [{ $eq: ['$eventId', '$$eventId'] }, { $eq: ['$teamId', '$$teamId'] }] } } }],
+          as: 'standing',
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          eventId: 1,
+          teamId: '$_id',
+          name: '$event.name',
+          status: '$event.status',
+          createdAt: '$event.createdAt',
+          rank: { $first: '$standing.rank' },
+          avgScore: { $first: '$standing.avgScore' },
+        },
+      },
+      { $sort: { createdAt: -1 } },
+    ])
+    .toArray();
+
+  // Invitations still waiting for an answer, with the event's name.
+  const invitations = await db
+    .collection('invitations')
+    .aggregate([
+      { $match: { accountId: account._id, status: 'pending' } },
+      { $lookup: { from: 'events', localField: 'eventId', foreignField: '_id', as: 'event' } },
+      { $unwind: '$event' },
+      { $project: { eventId: 1, invitedBy: 1, createdAt: 1, eventName: '$event.name', eventStatus: '$event.status' } },
+      { $sort: { createdAt: 1 } },
+    ])
+    .toArray();
+
+  res.json({
+    team: { _id: account._id, name: account.name, members: account.members, code: account.code, demo: account.demo === true },
+    events,
+    invitations,
+  });
+});
+
+// GET /api/team/events/:eventId  -> this team's results in one of its events
+router.get('/team/events/:eventId', requireTeam, async (req, res) => {
+  const db = getDb();
+  const eventId = parseId(req.params.eventId, 'event id');
+  const team = await db.collection('teams').findOne({ eventId, accountId: req.teamAccount._id }, HIDE_CODE);
+  if (!team) throw httpError(404, 'Your team is not in this event');
 
   const event = await db
     .collection('events')
-    .findOne({ _id: team.eventId }, { projection: { name: 1, status: 1, rubric: 1, demo: 1 } });
+    .findOne({ _id: eventId }, { projection: { name: 1, status: 1, rubric: 1, demo: 1 } });
   if (!event) throw httpError(404, 'Event not found');
 
   // This team's row on the leaderboard (written by the aggregation's $merge).
@@ -243,7 +153,7 @@ router.get('/team/me', requireTeam, async (req, res) => {
 
   res.json({
     team: { _id: team._id, name: team.name, members: team.members },
-    event,
+    event: { _id: event._id, name: event.name, status: event.status, rubric: event.rubric, demo: event.demo === true },
     standing: standing
       ? { rank: standing.rank, avgScore: standing.avgScore, judgesCount: standing.judgesCount }
       : null,

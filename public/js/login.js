@@ -1,101 +1,119 @@
 // One sign-in screen for all three roles. The selected role decides which
 // API endpoint we call and which page we open afterwards.
-// "Student" = a member of a team, who signs in with the team's access code.
-// Judges sign in with their name AND their code. Administrators sign in with a
-// username + password, or create a new organiser account.
+//   Student (team)  -> team code + password, or register a new team
+//   Judge           -> name + the access code the organiser gave them
+//   Administrator   -> username + password, or create an organiser account
 
 const ROLES = {
   team: {
     endpoint: '/api/auth/team-login',
-    field: 'code', // name of the JSON field the server expects
-    label: 'Team access code',
-    placeholder: 'e.g. TEAM001',
-    isPassword: false,
-    name: null, // no name field for teams
+    name: { field: 'code', label: 'Team code', placeholder: 'e.g. TM7K4Q2X', autocomplete: 'username' },
+    secret: { field: 'password', label: 'Password', placeholder: 'Your team password', isPassword: true },
     next: 'team.html',
     demoLabel: 'Try the demo Student account',
-    forgot: 'Team codes are given out by your event organiser. Ask them for a new one - the admin can reset a code in one click.',
+    forgot: 'Your team code is shown on your team dashboard. There is no password reset yet - register a new team if you lost it.',
+    register: {
+      endpoint: '/api/auth/team-register',
+      name: { field: 'name', label: 'Team name', placeholder: 'e.g. Byte Bandits', autocomplete: 'off' },
+      members: true,
+      question: 'New team?',
+      action: 'Register your team',
+      sub: 'Register once and get a permanent team code. Organisers use it to invite you to events.',
+      next: 'team.html?welcome=1',
+    },
   },
   judge: {
     endpoint: '/api/auth/judge-login',
-    field: 'code',
-    label: 'Judge access code',
-    placeholder: 'e.g. JUDGE001',
-    isPassword: false,
     name: { field: 'name', label: 'Your name', placeholder: 'Exactly as the organiser added you', autocomplete: 'name' },
+    secret: { field: 'code', label: 'Judge access code', placeholder: 'e.g. 4F9A1C2B', isPassword: false },
     next: 'judge.html',
     demoLabel: 'Try the demo Judge account',
-    forgot: 'Your name and code are given out by your event organiser. Ask them for a new code - the admin can reset it in one click.',
+    forgot: 'Your name and code come from the event organiser. Codes expire when the event ends - ask the organiser for a new one.',
   },
   admin: {
     endpoint: '/api/auth/admin-login',
-    field: 'password',
-    label: 'Password',
-    placeholder: 'Enter your password',
-    isPassword: true,
     name: { field: 'username', label: 'Username', placeholder: 'Enter your username', autocomplete: 'username' },
+    secret: { field: 'password', label: 'Password', placeholder: 'Enter your password', isPassword: true },
     next: 'admin.html',
     demoLabel: 'Try the demo Administrator account',
     forgot: 'There is no email reset yet. If you are the main admin, your login is ADMIN_USERNAME / ADMIN_PASSWORD in the server\'s .env file.',
+    register: {
+      endpoint: '/api/auth/admin-register',
+      name: { field: 'username', label: 'Username', placeholder: '3-30 letters or digits', autocomplete: 'username' },
+      members: false,
+      question: 'New organiser?',
+      action: 'Create an account',
+      sub: 'Register as an organiser to create events, add judges and invite teams.',
+      next: 'admin.html',
+    },
   },
 };
 
 // Start on the role from the URL (login.html?role=judge), default Student.
 const params = new URLSearchParams(location.search);
 let currentRole = ROLES[params.get('role')] ? params.get('role') : 'team';
-// Administrator only: true = "Create an account" form instead of "Sign in".
+// true = the "register" form of the current role instead of "sign in".
 let registering = params.get('register') === '1';
 // Read ?demo=1 now, because selectRole() rewrites the URL.
 const startDemo = params.get('demo') === '1';
 
 function selectRole(role) {
   currentRole = role;
-  if (role !== 'admin') registering = false;
   const r = ROLES[role];
+  if (!r.register) registering = false;
+  const name = registering ? r.register.name : r.name;
 
   for (const tab of document.querySelectorAll('.login2-tab')) {
     tab.classList.toggle('active', tab.dataset.role === role);
     tab.setAttribute('aria-selected', tab.dataset.role === role);
   }
-  $('secret-label').textContent = r.label;
-  $('secret').type = r.isPassword ? 'password' : 'text';
-  $('secret').placeholder = r.isPassword && registering ? 'At least 8 characters' : r.placeholder;
-  $('secret').autocomplete = r.isPassword ? (registering ? 'new-password' : 'current-password') : 'off';
+
+  // First field: username / judge name / team code / team name.
+  $('username-block').classList.remove('hidden');
+  $('username').required = true;
+  $('username-label').textContent = name.label;
+  $('username').placeholder = name.placeholder;
+  $('username').autocomplete = name.autocomplete;
+  $('username').value = '';
+
+  // Team members (team registration only).
+  const members = registering && r.register.members;
+  $('members-block').classList.toggle('hidden', !members);
+  $('members').value = '';
+
+  // Second field: password or judge code.
+  const isPassword = r.secret.isPassword;
+  $('secret-label').textContent = r.secret.label;
+  $('secret').type = isPassword ? 'password' : 'text';
+  $('secret').placeholder = isPassword && registering ? 'At least 8 characters' : r.secret.placeholder;
+  $('secret').autocomplete = isPassword ? (registering ? 'new-password' : 'current-password') : 'off';
   $('secret').value = '';
+  $('icon-key').classList.toggle('hidden', isPassword);
+  $('icon-lock').classList.toggle('hidden', !isPassword);
+  $('eye-btn').classList.toggle('hidden', !isPassword);
 
-  // Name / username field (Judge and Administrator).
-  $('username-block').classList.toggle('hidden', !r.name);
-  $('username').required = Boolean(r.name);
-  if (r.name) {
-    $('username-label').textContent = r.name.label;
-    $('username').placeholder = r.name.placeholder;
-    $('username').autocomplete = r.name.autocomplete;
-  }
+  $('confirm-block').classList.toggle('hidden', !registering);
+  $('confirm').required = registering;
+  $('confirm').value = '';
 
-  $('icon-key').classList.toggle('hidden', r.isPassword);
-  $('icon-lock').classList.toggle('hidden', !r.isPassword);
-  $('eye-btn').classList.toggle('hidden', !r.isPassword);
-  $('forgot-btn').textContent = r.isPassword ? 'Forgot password?' : 'Forgot your code?';
+  $('forgot-btn').textContent = isPassword ? 'Forgot password?' : 'Forgot your code?';
   $('forgot-btn').classList.toggle('hidden', registering);
   $('forgot-text').classList.add('hidden');
   $('demo-label').textContent = r.demoLabel;
 
-  // Organiser sign-up only exists for the Administrator tab.
-  $('register-foot').classList.toggle('hidden', role !== 'admin');
-  $('confirm-block').classList.toggle('hidden', !registering);
-  $('confirm').required = registering;
-  $('confirm').value = '';
-  $('register-q').textContent = registering ? 'Already have an account?' : 'New organiser?';
-  $('register-toggle').textContent = registering ? 'Sign in' : 'Create an account';
-  $('login-title').replaceChildren(...(registering ? ['Create your ', el('span', 'account')] : ['Welcome ', el('span', 'back')]));
-  $('login-sub').textContent = registering
-    ? 'Register as an organiser to create events, add judges and import teams.'
-    : 'Sign in to manage your events, scores and teams.';
-  $('login-btn').firstChild.textContent = registering ? 'Create account ' : 'Sign In ';
+  // Sign up exists for teams and organisers, not judges (the organiser adds judges).
+  $('register-foot').classList.toggle('hidden', !r.register);
+  if (r.register) {
+    $('register-q').textContent = registering ? 'Already registered?' : r.register.question;
+    $('register-toggle').textContent = registering ? 'Sign in' : r.register.action;
+  }
+  $('login-title').replaceChildren(...(registering ? [role === 'team' ? 'Register your ' : 'Create your ', el('span', role === 'team' ? 'team' : 'account')] : ['Welcome ', el('span', 'back')]));
+  $('login-sub').textContent = registering ? r.register.sub : 'Sign in to manage your events, scores and teams.';
+  $('login-btn').firstChild.textContent = registering ? (role === 'team' ? 'Register team ' : 'Create account ') : 'Sign In ';
 
   // Keep the URL in sync so the page can be bookmarked / shared per role.
   history.replaceState(null, '', `login.html?role=${role}${registering ? '&register=1' : ''}`);
-  (r.name ? $('username') : $('secret')).focus();
+  $('username').focus();
 }
 
 for (const tab of document.querySelectorAll('.login2-tab')) {
@@ -104,10 +122,10 @@ for (const tab of document.querySelectorAll('.login2-tab')) {
 
 $('register-toggle').addEventListener('click', () => {
   registering = !registering;
-  selectRole('admin');
+  selectRole(currentRole);
 });
 
-// Eye button: show / hide the admin password.
+// Eye button: show / hide the password.
 $('eye-btn').addEventListener('click', () => {
   const input = $('secret');
   input.type = input.type === 'password' ? 'text' : 'password';
@@ -121,9 +139,9 @@ $('forgot-btn').addEventListener('click', () => {
 });
 
 // Saves the token. "Remember me" keeps it after the browser is closed.
-function finishLogin(token) {
+function finishLogin(token, next) {
   auth.set(currentRole, token, $('remember').checked);
-  location.href = ROLES[currentRole].next;
+  location.href = next || ROLES[currentRole].next;
 }
 
 $('login-form').addEventListener('submit', (e) => {
@@ -137,10 +155,13 @@ $('login-form').addEventListener('submit', (e) => {
     button.disabled = true;
     try {
       // No role passed to api(), because we don't have a token yet.
-      const body = { [r.field]: $('secret').value };
-      if (r.name) body[r.name.field] = $('username').value;
-      const data = await api('POST', registering ? '/api/auth/admin-register' : r.endpoint, body);
-      finishLogin(data.token);
+      const mode = registering ? r.register : r;
+      const body = { [mode.name.field]: $('username').value, [r.secret.field]: $('secret').value };
+      if (registering && r.register.members) {
+        body.members = $('members').value.split(',').map((m) => m.trim()).filter(Boolean);
+      }
+      const data = await api('POST', mode.endpoint, body);
+      finishLogin(data.token, mode.next);
     } finally {
       button.disabled = false;
     }

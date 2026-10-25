@@ -45,6 +45,7 @@ function requireAdmin(req, res, next) {
   // The .env admin has neither -> full access to every event.
   req.demoEventId = payload.demoEventId || null;
   req.adminId = payload.adminId ? parseId(payload.adminId, 'admin id') : null;
+  req.adminUsername = payload.username || null;
   next();
 }
 
@@ -85,28 +86,42 @@ async function requireJudge(req, res, next) {
   if (!judge) {
     throw httpError(401, 'This judge account no longer exists');
   }
+  // Codes expire when the admin ends the event, and that also ends open sessions.
+  if (judge.expiredAt) {
+    throw httpError(401, 'This event has ended, so your judge code has expired');
+  }
   // Later handlers use req.judge (its eventId decides which event they may score).
   req.judge = judge;
   next();
 }
 
-// Teams: same idea as judges. A team can only see its own results.
+// Teams sign in to their team ACCOUNT (not to one event). A team can only see
+// its own events, results and invitations.
 async function requireTeam(req, res, next) {
   const payload = readToken(req);
-  if (payload.role !== 'team') {
+  if (payload.role !== 'team' || !payload.accountId) {
     throw httpError(403, 'Team access only');
   }
-  const team = await getDb()
-    .collection('teams')
-    .findOne({ _id: parseId(payload.teamId, 'team id') });
-  if (!team) {
-    throw httpError(401, 'This team no longer exists');
+  const account = await getDb()
+    .collection('teamAccounts')
+    .findOne({ _id: parseId(payload.accountId, 'team id') }, { projection: { passwordHash: 0 } });
+  if (!account) {
+    throw httpError(401, 'This team account no longer exists');
   }
-  req.team = team;
+  req.teamAccount = account;
   next();
 }
 
-// Hashing for admin passwords. Unlike access codes, passwords are chosen by people
+// A team's permanent code, e.g. "TM7K4Q2X". No 0/O or 1/I, so it is easy to read out.
+const CODE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function generateTeamCode() {
+  const bytes = crypto.randomBytes(6);
+  let code = 'TM';
+  for (const byte of bytes) code += CODE_LETTERS[byte % CODE_LETTERS.length];
+  return code;
+}
+
+// Hashing for admin and team passwords. Unlike access codes, passwords are chosen by people
 // and are often short, so we use scrypt: a SLOW hash with a random salt, which makes
 // guessing passwords from a stolen database very expensive. Stored as "salt:hash" (hex).
 function hashPassword(password) {
@@ -138,6 +153,7 @@ module.exports = {
   requireJudge,
   requireTeam,
   generateCode,
+  generateTeamCode,
   hashPassword,
   checkPassword,
 };

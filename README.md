@@ -49,16 +49,21 @@ Open http://localhost:3000 for the landing page, then **Log in** (one screen, th
 
 | Role | How to log in | What they get |
 |---|---|---|
-| Admin | **Create an account** on the Administrator tab, or use `ADMIN_USERNAME` + `ADMIN_PASSWORD` from `.env` (sees every event) | Create events and rubrics, add judges (with a code you choose or a random one), add teams or **import them from Excel/CSV**, export teams with ranks, open/close events. Registered admins only see their own events |
-| Judge | **Name + code**, e.g. `Judge One` + `JUDGE001` (closed event: `Prof. Rao` + `SPRING01`) | Rate every team of their event with stars or a slider, with a live total preview |
-| Team | Code, e.g. `TEAM001` to `TEAM005` (closed event: `TEAM101` to `TEAM103`) | Live rank and average, every judge's marks and comments, and AI feedback once the event closes |
+| Admin | **Create an account** on the Administrator tab, or use `ADMIN_USERNAME` + `ADMIN_PASSWORD` from `.env` (sees every event) | Dashboard and Events list. Inside each event: add judges (a unique code is generated), invite teams by their team code, rankings, AI feedback, and End Event. Registered admins only see their own events |
+| Judge | **Name + code** from the organiser, e.g. `Judge One` + `JUDGE001` | Rate the event's teams one at a time (stars + feedback), then "Submit & next". Codes **expire when the admin ends the event** |
+| Team | **Register** on the Student tab (team name, members, password) to get a permanent team code. Sign in with **team code + password**. Seeded teams: `TM000001` to `TM000005` and `TM000101` to `TM000103`, password `team1234` | Accept or decline invitations, then per event: live rank, average, every judge's marks and comments, and AI feedback once the event ends |
 
-**Closing an event** recomputes the final ranking and automatically writes AI feedback for every team: the
-model merges the judges' short notes (e.g. "nice UI, laggy", "hgih latency") into one written review.
+**How a team joins an event:** the admin enters the team's code, which creates a *pending invitation*. The team
+sees a pop-up on its dashboard ("*admin* wants to add your team to *event*") and accepts or declines. Only
+accepting adds the team. Duplicates are impossible: one account per team, and unique indexes allow each team
+in an event only once and only one open invitation per team per event.
 
-**Excel import:** the first sheet needs a `Team name` column; `Members` (comma separated) and `Code` are optional.
-Rows are saved with one `insertMany` into the `teams` collection; team names already in the event are skipped.
-New codes are shown once and can be downloaded as `.xlsx`.
+**Ending an event** closes scoring, recomputes the final ranking, expires every judge code of the event and
+writes AI feedback for every team: the model merges the judges' short notes (e.g. "nice UI, laggy",
+"hgih latency") into one written review.
+
+**Excel:** "Invite from Excel" reads a `Team code` column and sends one invitation per row. "Export to Excel"
+downloads the event's teams with codes, ranks and averages.
 
 **Demo accounts:** every role also has a **Try the demo** button (no password or code). They all share
 the *ScoreStream Demo Event* (3 teams) stored in MongoDB. The demo admin is locked to that event by the
