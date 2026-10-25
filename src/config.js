@@ -32,6 +32,10 @@ const config = {
   aiBaseUrl: process.env.AI_BASE_URL || 'https://openrouter.ai/api/v1',
   aiModel: process.env.AI_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b:free',
   aiFallbackModel: process.env.AI_FALLBACK_MODEL || '', // empty = no fallback model
+  // Optional: send the fallback model to a different provider (e.g. Google Gemini).
+  // Empty = use AI_BASE_URL / AI_API_KEY for the fallback too.
+  aiFallbackBaseUrl: process.env.AI_FALLBACK_BASE_URL || '',
+  aiFallbackApiKey: process.env.AI_FALLBACK_API_KEY || '',
   port: Number(process.env.PORT) || 3000,
 };
 

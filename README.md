@@ -32,7 +32,9 @@ Fill in `.env`:
 | `AI_API_KEY` | Your OpenRouter key. Leave it empty to use the offline **MOCK** feedback. |
 | `AI_BASE_URL` | `https://openrouter.ai/api/v1` |
 | `AI_MODEL` | Main free OpenRouter model, e.g. `nvidia/nemotron-3-ultra-550b-a55b:free` |
-| `AI_FALLBACK_MODEL` | Used if the main model fails twice, e.g. `nvidia/nemotron-3.5-lightning:free` (optional) |
+| `AI_FALLBACK_MODEL` | Used if the main model fails twice, e.g. `gemini-3.5-flash-lite` (optional) |
+| `AI_FALLBACK_BASE_URL` | Optional different provider for the fallback, e.g. `https://generativelanguage.googleapis.com/v1beta/openai` (Google Gemini) |
+| `AI_FALLBACK_API_KEY` | Key for that provider (free Gemini key from aistudio.google.com). Empty = use `AI_API_KEY` |
 | `PORT` | `3000` |
 
 Then:

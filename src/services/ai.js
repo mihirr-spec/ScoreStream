@@ -3,6 +3,8 @@
 //
 // Provider: OpenRouter, which uses the OpenAI-compatible "chat completions" API.
 // Order of attempts: AI_MODEL (try + 1 retry) -> AI_FALLBACK_MODEL (try + 1 retry).
+// The fallback can use a different provider (e.g. Google Gemini's OpenAI-compatible
+// endpoint) via AI_FALLBACK_BASE_URL + AI_FALLBACK_API_KEY.
 // If there is no API key, or every attempt fails, we return a clearly-labelled
 // MOCK result so the demo also works offline.
 
@@ -53,20 +55,23 @@ function normalise(parsed) {
   };
 }
 
-// One request to OpenRouter with the given model.
-// Throws on any problem (HTTP error, bad JSON, wrong shape).
-async function callModel(model, teamName, comments, scoreSummary) {
-  const response = await fetch(`${config.aiBaseUrl}/chat/completions`, {
+// One request to an OpenAI-compatible "chat completions" API.
+// provider = { baseUrl, apiKey, model }. Throws on any problem (HTTP error, bad JSON, wrong shape).
+async function callModel(provider, teamName, comments, scoreSummary) {
+  const headers = {
+    Authorization: `Bearer ${provider.apiKey}`,
+    'Content-Type': 'application/json',
+  };
+  if (provider.baseUrl.includes('openrouter.ai')) {
+    // Optional OpenRouter headers that identify our app on their dashboard.
+    headers['HTTP-Referer'] = 'http://localhost';
+    headers['X-Title'] = 'Live Event Judging System';
+  }
+  const response = await fetch(`${provider.baseUrl.replace(/\/$/, '')}/chat/completions`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${config.aiApiKey}`,
-      'Content-Type': 'application/json',
-      // Optional OpenRouter headers that identify our app on their dashboard.
-      'HTTP-Referer': 'http://localhost',
-      'X-Title': 'Live Event Judging System',
-    },
+    headers,
     body: JSON.stringify({
-      model,
+      model: provider.model,
       temperature: 0.3, // low = more consistent, less "creative" answers
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
@@ -122,17 +127,24 @@ async function generateTeamFeedback(teamName, comments, scoreSummary = '') {
   }
 
   // Main model first, then the fallback model (if one is set in .env).
-  const models = [config.aiModel];
-  if (config.aiFallbackModel) models.push(config.aiFallbackModel);
+  // The fallback uses its own base URL / key when given, otherwise the main ones.
+  const providers = [{ baseUrl: config.aiBaseUrl, apiKey: config.aiApiKey, model: config.aiModel }];
+  if (config.aiFallbackModel) {
+    providers.push({
+      baseUrl: config.aiFallbackBaseUrl || config.aiBaseUrl,
+      apiKey: config.aiFallbackApiKey || config.aiApiKey,
+      model: config.aiFallbackModel,
+    });
+  }
 
   // Each model gets two tries: the first try, plus ONE retry (e.g. if it returned bad JSON).
-  for (const model of models) {
+  for (const provider of providers) {
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        const result = await callModel(model, teamName, comments, scoreSummary);
+        const result = await callModel(provider, teamName, comments, scoreSummary);
         return { ...result, source: 'ai' };
       } catch (err) {
-        console.error(`[ai] ${model} attempt ${attempt} for "${teamName}" failed: ${err.message}`);
+        console.error(`[ai] ${provider.model} attempt ${attempt} for "${teamName}" failed: ${err.message}`);
       }
     }
   }
