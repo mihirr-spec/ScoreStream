@@ -1,13 +1,14 @@
-// Login routes: admin logs in with a password, judges and teams with an access code,
-// and anyone can open a one-click demo account.
+// Login routes: admins register and log in with a username + password, judges with
+// their name + access code, teams with an access code, and anyone can open a
+// one-click demo account.
 
 const crypto = require('crypto');
 const express = require('express');
 const config = require('../config');
 const { getDb } = require('../db');
-const { signToken, sha256 } = require('../middleware/auth');
+const { signToken, sha256, hashPassword, checkPassword } = require('../middleware/auth');
 const { ensureDemoEvent } = require('../services/demo');
-const { httpError, isNonEmptyString } = require('../middleware/validate');
+const { httpError, isNonEmptyString, isValidUsername } = require('../middleware/validate');
 
 const router = express.Router();
 
@@ -21,14 +22,59 @@ function safeEqual(given, expected) {
   return crypto.timingSafeEqual(a, b);
 }
 
+// POST /api/auth/admin-register  { username, password }
+// Anyone can create an organiser account. Each admin only sees the events they create.
+router.post('/auth/admin-register', async (req, res) => {
+  const { username, password } = req.body || {};
+  if (!isValidUsername(username)) {
+    throw httpError(400, 'username must be 3-30 letters, digits, dot, dash or underscore');
+  }
+  if (typeof password !== 'string' || password.length < 8 || password.length > 200) {
+    throw httpError(400, 'password must be at least 8 characters');
+  }
+  const name = username.trim();
+  // The .env admin's name is reserved, so nobody can register a look-alike account.
+  if (name.toLowerCase() === config.adminUsername.toLowerCase()) {
+    throw httpError(409, 'That username is already taken');
+  }
+
+  const admin = {
+    username: name,
+    usernameLower: name.toLowerCase(), // the unique index is on this, so "Asha" and "asha" clash
+    passwordHash: hashPassword(password),
+    createdAt: new Date(),
+  };
+  let result;
+  try {
+    result = await getDb().collection('admins').insertOne(admin);
+  } catch (err) {
+    if (err.code === 11000) throw httpError(409, 'That username is already taken');
+    throw err;
+  }
+
+  const token = signToken({ role: 'admin', adminId: result.insertedId.toString(), username: name });
+  res.status(201).json({ token, admin: { _id: result.insertedId, username: name } });
+});
+
 // POST /api/auth/admin-login  { username, password }
-router.post('/auth/admin-login', (req, res) => {
+// Registered admins are looked up in MongoDB. The admin from .env (ADMIN_USERNAME /
+// ADMIN_PASSWORD) also still works, and can see every event.
+router.post('/auth/admin-login', async (req, res) => {
   const { username, password } = req.body || {};
   if (!isNonEmptyString(username, 100)) {
     throw httpError(400, 'username is required');
   }
   if (typeof password !== 'string' || password.length === 0) {
     throw httpError(400, 'password is required');
+  }
+
+  const admin = await getDb().collection('admins').findOne({ usernameLower: username.trim().toLowerCase() });
+  if (admin) {
+    if (!checkPassword(password, admin.passwordHash)) {
+      throw httpError(401, 'Wrong username or password');
+    }
+    const token = signToken({ role: 'admin', adminId: admin._id.toString(), username: admin.username });
+    return res.json({ token, admin: { _id: admin._id, username: admin.username } });
   }
 
   // Check BOTH, and give the same message either way, so nobody can find out
@@ -39,22 +85,27 @@ router.post('/auth/admin-login', (req, res) => {
     throw httpError(401, 'Wrong username or password');
   }
 
-  res.json({ token: signToken({ role: 'admin' }) });
+  res.json({ token: signToken({ role: 'admin', username: config.adminUsername }) });
 });
 
-// POST /api/auth/judge-login  { code }
+// POST /api/auth/judge-login  { name, code }
+// The judge types the name the admin gave them AND their access code.
 router.post('/auth/judge-login', async (req, res) => {
-  const { code } = req.body || {};
+  const { name, code } = req.body || {};
+  if (!isNonEmptyString(name, 100)) {
+    throw httpError(400, 'name is required');
+  }
   if (!isNonEmptyString(code, 50)) {
     throw httpError(400, 'code is required');
   }
 
   // We only ever stored the HASH of the code, so hash what the judge typed
-  // and look for a match (uses the unique codeHash index).
+  // and look for a match (uses the unique codeHash index), then check the name too.
+  // Same message for a wrong name or a wrong code, so neither can be guessed alone.
   const db = getDb();
   const judge = await db.collection('judges').findOne({ codeHash: sha256(code.trim().toUpperCase()) });
-  if (!judge) {
-    throw httpError(401, 'Invalid judge code');
+  if (!judge || judge.name.trim().toLowerCase() !== name.trim().toLowerCase()) {
+    throw httpError(401, 'Wrong judge name or code');
   }
 
   const event = await db.collection('events').findOne({ _id: judge.eventId });
@@ -108,7 +159,7 @@ router.post('/auth/demo-login', async (req, res) => {
 
   if (role === 'admin') {
     // demoEventId locks this admin token to the demo event (see requireAdmin).
-    return res.json({ token: signToken({ role: 'admin', demoEventId: eventId }), demo: true, event: { _id: event._id, name: event.name } });
+    return res.json({ token: signToken({ role: 'admin', demoEventId: eventId, username: 'Demo admin' }), demo: true, event: { _id: event._id, name: event.name } });
   }
 
   if (role === 'judge') {

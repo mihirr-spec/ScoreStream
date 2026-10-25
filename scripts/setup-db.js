@@ -44,6 +44,23 @@ const validators = {
         createdAt: { bsonType: 'date' },
         // Optional: true only for the shared demo event (see services/demo.js).
         demo: { bsonType: 'bool' },
+        // Optional: the registered admin who created the event (reference to admins._id).
+        // Events made by the .env admin have no owner.
+        ownerId: { bsonType: 'objectId' },
+      },
+    },
+  },
+
+  admins: {
+    $jsonSchema: {
+      bsonType: 'object',
+      required: ['username', 'usernameLower', 'passwordHash', 'createdAt'],
+      properties: {
+        username: { bsonType: 'string', minLength: 3, maxLength: 30 },
+        usernameLower: { bsonType: 'string', minLength: 3, maxLength: 30 },
+        // scrypt "salt:hash" in hex (16-byte salt, 64-byte hash). Never the plain password.
+        passwordHash: { bsonType: 'string', pattern: '^[a-f0-9]{32}:[a-f0-9]{128}$' },
+        createdAt: { bsonType: 'date' },
       },
     },
   },
@@ -176,7 +193,13 @@ const indexes = {
     // One feedback document per team per event. Re-generating REPLACES it (upsert).
     { key: { eventId: 1, teamId: 1 }, options: { unique: true, name: 'unique_event_team' } },
   ],
+  admins: [
+    // UNIQUE: no two organisers can register the same username (in any letter case).
+    { key: { usernameLower: 1 }, options: { unique: true, name: 'unique_usernameLower' } },
+  ],
   events: [
+    // An organiser's event list: find({ ownerId }).sort({ createdAt: -1 }).
+    { key: { ownerId: 1, createdAt: -1 }, options: { name: 'ownerId_1_createdAt_-1' } },
     // PARTIAL unique index: only documents with demo: true are indexed, so at most
     // ONE demo event can exist, even if two visitors start the demo at the same moment.
     { key: { demo: 1 }, options: { unique: true, partialFilterExpression: { demo: true }, name: 'unique_demo_event' } },

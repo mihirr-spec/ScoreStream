@@ -41,15 +41,27 @@ function requireAdmin(req, res, next) {
     throw httpError(403, 'Admin access only');
   }
   // A demo admin token carries demoEventId: it may only touch that one event.
-  // A real admin (logged in with the password) has no demoEventId -> full access.
+  // A registered admin's token carries adminId: they may only touch events they own.
+  // The .env admin has neither -> full access to every event.
   req.demoEventId = payload.demoEventId || null;
+  req.adminId = payload.adminId ? parseId(payload.adminId, 'admin id') : null;
   next();
 }
 
 // Called by admin routes once they know which event a request is about.
-function assertEventAccess(req, eventId) {
-  if (req.demoEventId && req.demoEventId !== eventId.toString()) {
-    throw httpError(403, 'The demo admin can only manage the demo event');
+// If the event does not exist we let the route answer 404 itself.
+async function assertEventAccess(req, eventId) {
+  if (req.demoEventId) {
+    if (req.demoEventId !== eventId.toString()) {
+      throw httpError(403, 'The demo admin can only manage the demo event');
+    }
+    return;
+  }
+  if (req.adminId) {
+    const event = await getDb().collection('events').findOne({ _id: eventId }, { projection: { ownerId: 1 } });
+    if (event && !(event.ownerId && event.ownerId.equals(req.adminId))) {
+      throw httpError(403, 'You can only manage your own events');
+    }
   }
 }
 
@@ -94,6 +106,23 @@ async function requireTeam(req, res, next) {
   next();
 }
 
+// Hashing for admin passwords. Unlike access codes, passwords are chosen by people
+// and are often short, so we use scrypt: a SLOW hash with a random salt, which makes
+// guessing passwords from a stolen database very expensive. Stored as "salt:hash" (hex).
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+}
+
+function checkPassword(password, stored) {
+  const [salt, hash] = String(stored).split(':');
+  if (!salt || !hash) return false;
+  const expected = Buffer.from(hash, 'hex');
+  const actual = crypto.scryptSync(password, salt, 64);
+  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+}
+
 // Random 8-character access code, e.g. "4F9A1C2B" (used for judges and teams).
 // crypto.randomBytes is cryptographically random, unlike Math.random().
 function generateCode() {
@@ -109,4 +138,6 @@ module.exports = {
   requireJudge,
   requireTeam,
   generateCode,
+  hashPassword,
+  checkPassword,
 };

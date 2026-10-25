@@ -3,6 +3,8 @@
 const express = require('express');
 const { getDb } = require('../db');
 const { requireAdmin, assertEventAccess, denyDemo } = require('../middleware/auth');
+const { recomputeLeaderboard } = require('../services/leaderboard');
+const { generateEventFeedback } = require('../services/feedback');
 const {
   httpError,
   parseId,
@@ -16,8 +18,8 @@ const router = express.Router();
 
 // GET /api/events  -> all events, newest first
 router.get('/events', requireAdmin, async (req, res) => {
-  // A demo admin only sees the demo event.
-  const filter = req.demoEventId ? { demo: true } : {};
+  // A demo admin only sees the demo event, a registered admin only the events they created.
+  const filter = req.demoEventId ? { demo: true } : req.adminId ? { ownerId: req.adminId } : {};
   const events = await getDb().collection('events').find(filter).sort({ createdAt: -1 }).toArray();
   res.json(events);
 });
@@ -39,6 +41,8 @@ router.post('/events', requireAdmin, async (req, res) => {
     rubric: cleanRubric(rubric),
     createdAt: new Date(),
   };
+  // Remember who created it, so other admins can't see or change it.
+  if (req.adminId) event.ownerId = req.adminId;
   const result = await getDb().collection('events').insertOne(event);
   res.status(201).json({ _id: result.insertedId, ...event });
 });
@@ -46,7 +50,7 @@ router.post('/events', requireAdmin, async (req, res) => {
 // GET /api/events/:id
 router.get('/events/:id', requireAdmin, async (req, res) => {
   const eventId = parseId(req.params.id, 'event id');
-  assertEventAccess(req, eventId);
+  await assertEventAccess(req, eventId);
   const event = await getDb().collection('events').findOne({ _id: eventId });
   if (!event) throw httpError(404, 'Event not found');
   res.json(event);
@@ -56,7 +60,7 @@ router.get('/events/:id', requireAdmin, async (req, res) => {
 router.patch('/events/:id', requireAdmin, async (req, res) => {
   const db = getDb();
   const eventId = parseId(req.params.id, 'event id');
-  assertEventAccess(req, eventId);
+  await assertEventAccess(req, eventId);
   const { status, rubric } = req.body || {};
   const changes = {};
 
@@ -85,6 +89,14 @@ router.patch('/events/:id', requireAdmin, async (req, res) => {
     .collection('events')
     .findOneAndUpdate({ _id: eventId }, { $set: changes }, { returnDocument: 'after' });
   if (!updated) throw httpError(404, 'Event not found');
+
+  // Closing the event = judging is over: lock in the final ranking and start writing
+  // AI feedback for every team. Feedback runs in the BACKGROUND (one team at a time
+  // can take a while with a real AI), so the admin gets an answer straight away.
+  if (changes.status === 'closed') {
+    await recomputeLeaderboard(eventId);
+    generateEventFeedback(eventId).catch((err) => console.error(`[feedback] event ${eventId}: ${err.message}`));
+  }
   res.json(updated);
 });
 
@@ -94,6 +106,7 @@ router.delete('/events/:id', requireAdmin, async (req, res) => {
   denyDemo(req, 'delete the demo event');
   const db = getDb();
   const eventId = parseId(req.params.id, 'event id');
+  await assertEventAccess(req, eventId);
 
   const result = await db.collection('events').deleteOne({ _id: eventId });
   if (result.deletedCount === 0) throw httpError(404, 'Event not found');

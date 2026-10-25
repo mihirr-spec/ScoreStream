@@ -1,5 +1,5 @@
-// Team page: your live rank, average score, marks per criterion,
-// and (after the event closes) your AI feedback.
+// Team page: your live rank, average score, marks per criterion, every judge's
+// own score, and (after the event closes) your AI feedback.
 
 requireLogin('team');
 
@@ -43,6 +43,28 @@ function showBreakdown(breakdown) {
   }
 }
 
+// One row per judge: their mark for each criterion, total and comment.
+function showJudgeScores(rubric, judgeScores) {
+  const table = $('judge-scores');
+  table.replaceChildren();
+  if (judgeScores.length === 0) {
+    table.append(el('caption', 'No judge has scored you yet.', 'empty'));
+    return;
+  }
+  const head = el('tr');
+  for (const title of ['Judge', ...rubric.map((r) => `${r.label} /${r.max}`), 'Total', 'Comment']) head.append(el('th', title));
+  table.append(head);
+  for (const s of judgeScores) {
+    const row = el('tr');
+    row.append(el('td', s.judgeName));
+    for (const r of rubric) row.append(el('td', s.criteria[r.key] ?? '-'));
+    const total = el('td');
+    total.append(el('strong', s.total));
+    row.append(total, el('td', s.comment || '-', 'muted small'));
+    table.append(row);
+  }
+}
+
 function showFeedback(event, feedback) {
   const box = $('feedback');
   box.replaceChildren();
@@ -52,7 +74,7 @@ function showFeedback(event, feedback) {
     return;
   }
   if (!feedback) {
-    box.append(el('p', 'The event is closed. Your feedback is being prepared by the organiser - check back soon.', 'muted'));
+    box.append(el('p', "✨ The event is closed. Your AI feedback is being written from the judges' comments - check back in a minute.", 'muted'));
     return;
   }
 
@@ -88,6 +110,7 @@ async function load() {
 
   showStanding(data.standing, data.totalTeams);
   showBreakdown(data.breakdown);
+  showJudgeScores(data.event.rubric, data.judgeScores);
   showFeedback(data.event, data.feedback);
 
   // Listen to the event's public leaderboard stream and pick out our own row.

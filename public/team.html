@@ -12,7 +12,7 @@
     try { if (localStorage.getItem('theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch (e) {}
   </script>
   <link rel="icon" type="image/png" href="img/favicon.png">
-  <link rel="stylesheet" href="css/style.css?v=10">
+  <link rel="stylesheet" href="css/style.css?v=12">
 </head>
 <body>
   <header class="nav">
@@ -77,6 +77,11 @@
         <div id="breakdown"></div>
       </section>
 
+      <section class="card">
+        <div class="card-head"><h2>Judges' scores</h2><span class="muted small">Every judge's marks and comments</span></div>
+        <div class="table-wrap"><table id="judge-scores"></table></div>
+      </section>
+
       <section class="card feedback-card" id="feedback-box">
         <div class="card-head"><h2>AI feedback</h2></div>
         <div id="feedback"></div>
@@ -84,7 +89,7 @@
     </div>
   </main>
 
-  <script src="js/common.js?v=10"></script>
-  <script src="js/team.js?v=10"></script>
+  <script src="js/common.js?v=12"></script>
+  <script src="js/team.js?v=12"></script>
 </body>
 </html>

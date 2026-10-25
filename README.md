@@ -31,8 +31,8 @@ Fill in `.env`:
 | `JWT_SECRET` | A long random string (e.g. `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`) |
 | `AI_API_KEY` | Your OpenRouter key. Leave it empty to use the offline **MOCK** feedback. |
 | `AI_BASE_URL` | `https://openrouter.ai/api/v1` |
-| `AI_MODEL` | Main free OpenRouter model, e.g. `nvidia/nemotron-3-super-120b-a12b:free` |
-| `AI_FALLBACK_MODEL` | Used if the main model fails twice, e.g. `google/gemma-4-31b-it:free` (optional) |
+| `AI_MODEL` | Main free OpenRouter model, e.g. `nvidia/nemotron-3-ultra-550b-a55b:free` |
+| `AI_FALLBACK_MODEL` | Used if the main model fails twice, e.g. `nvidia/nemotron-3.5-lightning:free` (optional) |
 | `PORT` | `3000` |
 
 Then:
@@ -47,9 +47,16 @@ Open http://localhost:3000 for the landing page, then **Log in** (one screen, th
 
 | Role | How to log in | What they get |
 |---|---|---|
-| Admin | `ADMIN_USERNAME` (default `admin`) + `ADMIN_PASSWORD` | Create events and rubrics, add teams and judges (codes shown once), open/close events, see all scores, generate AI feedback |
-| Judge | Code, e.g. `JUDGE001` to `JUDGE003` (closed event: `SPRING01`, `SPRING02`) | Rate every team of their event with stars or a slider, with a live total preview |
-| Team | Code, e.g. `TEAM001` to `TEAM005` (closed event: `TEAM101` to `TEAM103`) | Live rank, average score and stars, average per criterion, and AI feedback after the event closes |
+| Admin | **Create an account** on the Administrator tab, or use `ADMIN_USERNAME` + `ADMIN_PASSWORD` from `.env` (sees every event) | Create events and rubrics, add judges (with a code you choose or a random one), add teams or **import them from Excel/CSV**, export teams with ranks, open/close events. Registered admins only see their own events |
+| Judge | **Name + code**, e.g. `Judge One` + `JUDGE001` (closed event: `Prof. Rao` + `SPRING01`) | Rate every team of their event with stars or a slider, with a live total preview |
+| Team | Code, e.g. `TEAM001` to `TEAM005` (closed event: `TEAM101` to `TEAM103`) | Live rank and average, every judge's marks and comments, and AI feedback once the event closes |
+
+**Closing an event** recomputes the final ranking and automatically writes AI feedback for every team: the
+model merges the judges' short notes (e.g. "nice UI, laggy", "hgih latency") into one written review.
+
+**Excel import:** the first sheet needs a `Team name` column; `Members` (comma separated) and `Code` are optional.
+Rows are saved with one `insertMany` into the `teams` collection; team names already in the event are skipped.
+New codes are shown once and can be downloaded as `.xlsx`.
 
 **Demo accounts:** every role also has a **Try the demo** button (no password or code). They all share
 the *ScoreStream Demo Event* (3 teams) stored in MongoDB. The demo admin is locked to that event by the
@@ -68,7 +75,7 @@ a team with the stars. The leaderboard re-ranks on its own, without a refresh.
 | `npm run seed` | Deletes and recreates the two demo events |
 | `npm run dev` / `npm start` | Runs the server (with / without auto-restart) |
 | `npm run explain` | Prints COLLSCAN vs IXSCAN for the main queries |
-| `npm test` | Runs the API tests: the 6 required cases plus team login and demo-account limits (separate `<DB_NAME>_test` database) |
+| `npm test` | Runs the API tests: the 6 required cases plus team login, demo limits, judge name + code login, admin accounts and Excel import (separate `<DB_NAME>_test` database) |
 
 ### explain() screenshots (COLLSCAN vs IXSCAN)
 
@@ -88,7 +95,7 @@ ScoreStream/
 │   ├── config.js               Reads .env in one place
 │   ├── db.js                   One shared MongoClient (connectDb / getDb / closeDb)
 │   ├── middleware/
-│   │   ├── auth.js             JWT tokens, requireAdmin/Judge/Team, demo-admin limits, sha256
+│   │   ├── auth.js             JWT tokens, requireAdmin/Judge/Team, event ownership, sha256, scrypt passwords
 │   │   ├── validate.js         httpError, parseId, rubric and members validation
 │   │   └── errorHandler.js     JSON 404 and the central error handler
 │   ├── routes/
@@ -100,6 +107,7 @@ ScoreStream/
 │       ├── changeStream.js     Watches scores -> recompute -> SSE push
 │       ├── sse.js              Connected browsers per event
 │       ├── demo.js             Creates the shared demo event behind the demo accounts
+│       ├── feedback.js         Writes AI feedback for every team of a closed event
 │       └── ai.js               OpenRouter call + fallback model + mock (only AI-specific file)
 ├── public/                     Frontend (plain HTML, CSS, JS)
 │   ├── index.html              Landing page

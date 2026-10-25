@@ -12,7 +12,7 @@
     try { if (localStorage.getItem('theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch (e) {}
   </script>
   <link rel="icon" type="image/png" href="img/favicon.png">
-  <link rel="stylesheet" href="css/style.css?v=10">
+  <link rel="stylesheet" href="css/style.css?v=12">
 </head>
 <body>
   <main class="login2">
@@ -30,8 +30,8 @@
     </a>
 
     <div class="login2-card">
-      <h1>Welcome <span>back</span></h1>
-      <p class="sub">Sign in to manage your events, scores and teams.</p>
+      <h1 id="login-title">Welcome <span>back</span></h1>
+      <p class="sub" id="login-sub">Sign in to manage your events, scores and teams.</p>
 
       <!-- Role tabs. "Student" logs in with their team's code. -->
       <div class="login2-tabs" role="tablist">
@@ -50,9 +50,9 @@
       </div>
 
       <form class="login2-form" id="login-form">
-        <!-- Only shown for the Administrator tab -->
+        <!-- Shown for Administrator (username) and Judge (their name) -->
         <div id="username-block" class="hidden">
-          <label class="lbl" for="username">Admin username</label>
+          <label class="lbl" for="username" id="username-label">Admin username</label>
           <div class="input-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c.8-4 4-6.5 8-6.5s7.2 2.5 8 6.5"/></svg>
             <input id="username" autocomplete="username" placeholder="Enter your username">
@@ -67,6 +67,15 @@
           <button class="eye-btn hidden" id="eye-btn" type="button" aria-label="Show password">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
           </button>
+        </div>
+
+        <!-- Only shown when an organiser creates a new account -->
+        <div id="confirm-block" class="hidden">
+          <label class="lbl" for="confirm">Confirm password</label>
+          <div class="input-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+            <input id="confirm" type="password" autocomplete="new-password" placeholder="Type the password again">
+          </div>
         </div>
 
         <div class="login2-row">
@@ -84,11 +93,12 @@
         <span aria-hidden="true">⭐</span> <span id="demo-label">Try the demo Student account</span>
       </button>
 
+      <p class="login2-foot hidden" id="register-foot"><span id="register-q">New organiser?</span> <button class="link-btn" id="register-toggle" type="button">Create an account</button></p>
       <p class="login2-foot">New to ScoreStream? <a href="index.html#roles">See how it works</a></p>
     </div>
   </main>
 
-  <script src="js/common.js?v=10"></script>
-  <script src="js/login.js?v=10"></script>
+  <script src="js/common.js?v=12"></script>
+  <script src="js/login.js?v=12"></script>
 </body>
 </html>

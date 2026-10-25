@@ -5,7 +5,9 @@ requireLogin('admin');
 
 // A demo admin token is limited to the demo event (the server enforces this).
 const isDemo = Boolean(tokenPayload('admin').demoEventId);
-setupUserBar('admin', isDemo ? 'Demo admin' : 'Admin');
+const adminName = isDemo ? 'Demo admin' : tokenPayload('admin').username || 'Admin';
+setupUserBar('admin', adminName);
+$('welcome-name').textContent = adminName;
 
 let selectedEvent = null;
 
@@ -81,11 +83,14 @@ function updateWeightSum() {
 }
 
 $('add-rubric-row').addEventListener('click', () => addRubricRow());
-$('new-event-btn').addEventListener('click', () => {
+function openCreatePanel() {
   selectedEvent = null;
   showPanel('create');
+  $('event-name').focus();
   safely(loadEvents);
-});
+}
+$('new-event-btn').addEventListener('click', openCreatePanel);
+$('welcome-create-btn').addEventListener('click', openCreatePanel);
 
 $('event-form').addEventListener('submit', (e) => {
   e.preventDefault();
@@ -113,6 +118,7 @@ async function selectEvent(eventId) {
   const ev = selectedEvent;
   showPanel('event');
   $('code-box').classList.add('hidden');
+  $('import-result').classList.add('hidden');
 
   $('detail-name').textContent = ev.name;
   $('detail-status').replaceChildren(badge(ev.status));
@@ -121,7 +127,9 @@ async function selectEvent(eventId) {
   for (const btn of $('status-seg').children) btn.classList.toggle('active', btn.dataset.status === ev.status);
   $('generate-feedback').disabled = ev.status !== 'closed';
   $('feedback-note').textContent =
-    ev.status === 'closed' ? 'The event is closed - you can generate feedback now.' : 'Available after the event is closed. Generated one team at a time.';
+    ev.status === 'closed'
+      ? 'The event is closed. Feedback was written automatically - regenerate it if judges changed their comments.'
+      : 'Written automatically for every team when you close the event.';
 
   await Promise.all([loadEvents(), loadTeams(), loadJudges(), loadScores(), loadFeedback()]);
 }
@@ -130,9 +138,17 @@ async function selectEvent(eventId) {
 for (const btn of $('status-seg').children) {
   btn.addEventListener('click', () =>
     safely(async () => {
-      await adminApi('PATCH', `/api/events/${selectedEvent._id}`, { status: btn.dataset.status });
-      toast(`Event is now ${btn.dataset.status}`);
+      const status = btn.dataset.status;
+      const closing = status === 'closed' && selectedEvent.status !== 'closed';
+      if (closing && !confirm('Close the event? Judges can no longer score, final ranks are published and AI feedback is written for every team.')) return;
+      await adminApi('PATCH', `/api/events/${selectedEvent._id}`, { status });
       await selectEvent(selectedEvent._id);
+      if (closing) {
+        toast('Event closed - writing AI feedback for every team...');
+        watchFeedback(selectedEvent._id);
+      } else {
+        toast(`Event is now ${status}`);
+      }
     })
   );
 }
@@ -217,13 +233,163 @@ $('team-form').addEventListener('submit', (e) => {
   e.preventDefault();
   safely(async () => {
     const members = $('team-members').value.split(',').map((m) => m.trim()).filter(Boolean);
-    const team = await adminApi('POST', `/api/events/${selectedEvent._id}/teams`, { name: $('team-name').value, members });
+    const team = await adminApi('POST', `/api/events/${selectedEvent._id}/teams`, {
+      name: $('team-name').value,
+      members,
+      code: $('team-code').value,
+    });
     $('team-name').value = '';
     $('team-members').value = '';
+    $('team-code').value = '';
     showCode(`team ${team.name}`, team.code);
     await loadTeams();
   });
 });
+
+// ---------- Excel import / export ----------
+// SheetJS reads and writes .xlsx/.xls/.csv in the browser. It is only downloaded
+// the first time the admin imports or exports.
+let sheetJs = null;
+function loadSheetJs() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  if (!sheetJs) {
+    sheetJs = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      script.onload = () => resolve(window.XLSX);
+      script.onerror = () => {
+        sheetJs = null;
+        reject(new Error('Could not load the Excel library. Check your internet connection.'));
+      };
+      document.head.append(script);
+    });
+  }
+  return sheetJs;
+}
+
+// Saves rows (array of objects) as an .xlsx file.
+async function downloadSheet(rows, sheetName, fileName) {
+  const XLSX = await loadSheetJs();
+  const book = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(rows), sheetName);
+  XLSX.writeFile(book, fileName);
+}
+
+// "Spring Hackathon 2026" -> "spring-hackathon-2026"
+const slug = (text) => text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'event';
+
+// Turns sheet rows into { name, members, code } using the column headings:
+// a heading containing "team" or "name" = team name, any heading containing
+// "member" = members (several member columns are fine), "code" = access code.
+function rowsToTeams(rows) {
+  return rows.map((row) => {
+    const team = { name: '', members: [], code: '' };
+    for (const [heading, value] of Object.entries(row)) {
+      const h = heading.toLowerCase();
+      const text = String(value ?? '').trim();
+      if (!text) continue;
+      if (h.includes('member')) team.members.push(...text.split(/[,;\n]/).map((m) => m.trim()).filter(Boolean));
+      else if (h.includes('code')) team.code = text;
+      else if (!team.name && (h.includes('team') || h.includes('name'))) team.name = text;
+    }
+    return team;
+  });
+}
+
+$('template-btn').addEventListener('click', () =>
+  safely(() =>
+    downloadSheet(
+      [
+        { 'Team name': 'Byte Bandits', Members: 'Asha, Rohan', Code: '' },
+        { 'Team name': 'Null Pointers', Members: 'Kabir, Meera, Dev', Code: 'NULLPTR1' },
+      ],
+      'Teams',
+      'scorestream-teams-template.xlsx'
+    )
+  )
+);
+
+let lastImport = [];
+$('import-file').addEventListener('change', (e) =>
+  safely(async () => {
+    const file = e.target.files[0];
+    e.target.value = ''; // so choosing the same file again still fires "change"
+    if (!file) return;
+    const XLSX = await loadSheetJs();
+    const book = XLSX.read(await file.arrayBuffer());
+    const rows = XLSX.utils.sheet_to_json(book.Sheets[book.SheetNames[0]], { defval: '' });
+    const teams = rowsToTeams(rows).filter((t) => t.name || t.members.length || t.code);
+    if (teams.length === 0) throw new Error('No teams found. The first sheet needs a "Team name" column.');
+
+    // The server saves every valid row with one insertMany into MongoDB.
+    const result = await adminApi('POST', `/api/events/${selectedEvent._id}/teams/import`, { teams });
+    lastImport = result.teams;
+    showImportResult(result);
+    const skippedNote = result.skipped.length ? `, skipped ${result.skipped.length}` : '';
+    toast(`Imported ${result.imported} team(s)${skippedNote}`);
+    await loadTeams();
+  })
+);
+
+function showImportResult(result) {
+  $('import-title').textContent = `Imported ${result.imported} team(s)`;
+  const table = $('import-table');
+  table.replaceChildren();
+  if (result.teams.length) {
+    const head = el('tr');
+    for (const title of ['Team', 'Members', 'Code']) head.append(el('th', title));
+    table.append(head);
+    for (const t of result.teams) {
+      const row = el('tr');
+      const code = el('td');
+      code.append(el('code', t.code));
+      row.append(el('td', t.name), el('td', t.members.join(', '), 'muted small'), code);
+      table.append(row);
+    }
+  }
+  const skipped = $('import-skipped');
+  skipped.replaceChildren();
+  for (const s of result.skipped) {
+    const where = s.row ? `row ${s.row}` : `"${s.name}"`;
+    skipped.append(el('li', `Skipped ${where}: ${s.reason}`));
+  }
+  $('download-codes').classList.toggle('hidden', result.teams.length === 0);
+  $('import-result').classList.remove('hidden');
+}
+
+$('download-codes').addEventListener('click', () =>
+  safely(() =>
+    downloadSheet(
+      lastImport.map((t) => ({ 'Team name': t.name, Members: t.members.join(', '), Code: t.code })),
+      'Team codes',
+      `${slug(selectedEvent.name)}-team-codes.xlsx`
+    )
+  )
+);
+$('close-import').addEventListener('click', () => $('import-result').classList.add('hidden'));
+
+// Export: every team with its members, and its rank / average once judges have scored.
+$('export-btn').addEventListener('click', () =>
+  safely(async () => {
+    const teams = await adminApi('GET', `/api/events/${selectedEvent._id}/teams`);
+    if (teams.length === 0) throw new Error('No teams to export yet');
+    const board = await api('GET', `/api/events/${selectedEvent._id}/leaderboard`).catch(() => ({ rows: [] }));
+    const byTeam = new Map(board.rows.map((r) => [r.teamId, r]));
+    const rows = teams
+      .map((t) => {
+        const r = byTeam.get(t._id);
+        return {
+          Rank: r ? r.rank : '',
+          'Team name': t.name,
+          Members: t.members.join(', '),
+          'Average score': r ? r.avgScore : '',
+          Judges: r ? r.judgesCount : 0,
+        };
+      })
+      .sort((a, b) => (a.Rank || Infinity) - (b.Rank || Infinity));
+    await downloadSheet(rows, 'Teams', `${slug(selectedEvent.name)}-teams.xlsx`);
+  })
+);
 
 // ---------- Judges ----------
 async function loadJudges() {
@@ -255,9 +421,13 @@ async function loadJudges() {
 $('judge-form').addEventListener('submit', (e) => {
   e.preventDefault();
   safely(async () => {
-    const judge = await adminApi('POST', `/api/events/${selectedEvent._id}/judges`, { name: $('judge-name').value });
+    const judge = await adminApi('POST', `/api/events/${selectedEvent._id}/judges`, {
+      name: $('judge-name').value,
+      code: $('judge-code').value,
+    });
     $('judge-name').value = '';
-    showCode(`judge ${judge.name}`, judge.code);
+    $('judge-code').value = '';
+    showCode(`judge ${judge.name} (they sign in with this name + code)`, judge.code);
     await loadJudges();
   });
 });
@@ -310,6 +480,24 @@ async function loadFeedback() {
   }
 }
 
+// After closing an event the server writes feedback in the background,
+// so check every few seconds until every team has some (max ~2 minutes).
+async function watchFeedback(eventId) {
+  for (let i = 0; i < 40; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    if (!selectedEvent || selectedEvent._id !== eventId) return;
+    const [items, teams] = await Promise.all([
+      adminApi('GET', `/api/events/${eventId}/feedback`),
+      adminApi('GET', `/api/events/${eventId}/teams`),
+    ]).catch(() => [[], []]);
+    await loadFeedback();
+    if (teams.length > 0 && items.length >= teams.length) {
+      toast(`AI feedback ready for ${items.length} team(s)`);
+      return;
+    }
+  }
+}
+
 $('generate-feedback').addEventListener('click', () =>
   safely(async () => {
     const btn = $('generate-feedback');
@@ -321,7 +509,7 @@ $('generate-feedback').addEventListener('click', () =>
       await loadFeedback();
     } finally {
       btn.disabled = selectedEvent.status !== 'closed';
-      btn.textContent = '✨ Generate feedback';
+      btn.textContent = '✨ Regenerate feedback';
     }
   })
 );

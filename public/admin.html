@@ -12,7 +12,7 @@
     try { if (localStorage.getItem('theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch (e) {}
   </script>
   <link rel="icon" type="image/png" href="img/favicon.png">
-  <link rel="stylesheet" href="css/style.css?v=10">
+  <link rel="stylesheet" href="css/style.css?v=12">
 </head>
 <body>
   <header class="nav">
@@ -79,8 +79,15 @@
 
         <!-- Nothing selected yet -->
         <section class="card empty" id="welcome-panel">
-          <h2>Welcome, organiser 👋</h2>
+          <h2>Welcome, <span id="welcome-name">organiser</span> 👋</h2>
           <p>Pick an event on the left, or create a new one to get started.</p>
+          <ol class="steps-list muted">
+            <li>Create an event and its scoring rubric</li>
+            <li>Add judges - each one signs in with their name + a code you choose</li>
+            <li>Add teams one by one, or import them from an Excel sheet</li>
+            <li>Set the event to <strong>Live</strong> so judges can score, then <strong>Closed</strong> to publish ranks and AI feedback</li>
+          </ol>
+          <button class="btn btn-primary" id="welcome-create-btn" type="button">+ Create an event</button>
         </section>
 
         <!-- One selected event -->
@@ -130,16 +137,41 @@
               <form id="team-form" class="row">
                 <div class="field"><label for="team-name">Team name</label><input id="team-name" required maxlength="100"></div>
                 <div class="field"><label for="team-members">Members (comma separated)</label><input id="team-members" placeholder="Asha, Rohan"></div>
+                <div class="field"><label for="team-code">Access code <span class="muted">(optional)</span></label><input id="team-code" maxlength="30" placeholder="Random if empty"></div>
                 <div class="field shrink"><button class="btn btn-primary" type="submit">Add team</button></div>
               </form>
+              <!-- Excel import / export. The sheet needs a "Team name" column; "Members" and "Code" are optional. -->
+              <div class="io-bar">
+                <span class="muted small">Excel / CSV: columns <strong>Team name</strong>, <strong>Members</strong> (comma separated), <strong>Code</strong> (optional)</span>
+                <div class="io-actions">
+                  <button class="btn btn-ghost btn-sm" id="template-btn" type="button">Template</button>
+                  <label class="btn btn-ghost btn-sm" for="import-file">⬆ Import</label>
+                  <input type="file" id="import-file" class="hidden" accept=".xlsx,.xls,.csv">
+                  <button class="btn btn-ghost btn-sm" id="export-btn" type="button">⬇ Export</button>
+                </div>
+              </div>
+              <!-- Result of the last import: new codes are shown ONCE -->
+              <div id="import-result" class="import-result hidden">
+                <div class="card-head">
+                  <div><strong id="import-title"></strong><div class="small muted">Copy or download the codes now. Only a hash is stored, so they can't be shown again.</div></div>
+                  <div class="io-actions">
+                    <button class="btn btn-primary btn-sm" id="download-codes" type="button">Download codes</button>
+                    <button class="btn btn-ghost btn-sm" id="close-import" type="button">✕</button>
+                  </div>
+                </div>
+                <div class="table-wrap"><table id="import-table"></table></div>
+                <ul id="import-skipped" class="small muted"></ul>
+              </div>
               <div id="team-list"></div>
             </div>
 
             <div data-panel="judges" class="hidden">
               <form id="judge-form" class="row">
-                <div class="field"><label for="judge-name">Judge name</label><input id="judge-name" required maxlength="100"></div>
+                <div class="field"><label for="judge-name">Judge name</label><input id="judge-name" required maxlength="100" placeholder="e.g. Prof. Rao"></div>
+                <div class="field"><label for="judge-code">Access code <span class="muted">(optional)</span></label><input id="judge-code" maxlength="30" placeholder="e.g. JUDGE01 - random if empty"></div>
                 <div class="field shrink"><button class="btn btn-primary" type="submit">Add judge</button></div>
               </form>
+              <p class="muted small">Judges sign in on the Judge tab with their <strong>name</strong> and <strong>code</strong>, and see only this event's teams.</p>
               <div id="judge-list"></div>
             </div>
 
@@ -150,8 +182,8 @@
 
             <div data-panel="feedback" class="hidden">
               <div class="card-head">
-                <span class="muted small" id="feedback-note">Available after the event is closed. Generated one team at a time.</span>
-                <button class="btn btn-primary" id="generate-feedback" type="button">✨ Generate feedback</button>
+                <span class="muted small" id="feedback-note">Written automatically for every team when you close the event.</span>
+                <button class="btn btn-primary" id="generate-feedback" type="button">✨ Regenerate feedback</button>
               </div>
               <div class="team-grid" id="feedback-list"></div>
             </div>
@@ -161,7 +193,7 @@
     </div>
   </main>
 
-  <script src="js/common.js?v=10"></script>
-  <script src="js/admin.js?v=10"></script>
+  <script src="js/common.js?v=12"></script>
+  <script src="js/admin.js?v=12"></script>
 </body>
 </html>

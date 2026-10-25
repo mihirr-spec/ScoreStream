@@ -30,7 +30,7 @@ const config = {
   // Tests set AI_FORCE_MOCK=1 so they never call the real AI over the network.
   aiForceMock: process.env.AI_FORCE_MOCK === '1',
   aiBaseUrl: process.env.AI_BASE_URL || 'https://openrouter.ai/api/v1',
-  aiModel: process.env.AI_MODEL || 'nvidia/nemotron-3-super-120b-a12b:free',
+  aiModel: process.env.AI_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b:free',
   aiFallbackModel: process.env.AI_FALLBACK_MODEL || '', // empty = no fallback model
   port: Number(process.env.PORT) || 3000,
 };

@@ -8,7 +8,11 @@
 
 const config = require('../config');
 
-const SYSTEM_PROMPT = `You are an assistant that summarises judges' comments for a team at a competition.
+const SYSTEM_PROMPT = `You are an assistant that turns judges' notes into one compiled piece of feedback for a team at a competition.
+Judges often write very short, rough notes with typos (e.g. "nice UI", "slow, laggy", "hgih latency").
+Interpret what each judge meant, merge points that say the same thing (e.g. "laggy" and "high latency"),
+and write clear, complete, encouraging feedback addressed to the team ("you"/"your"). Do not quote notes word for word.
+Use the scores, if given, to judge how strong each area was, but do not just repeat the numbers.
 Reply with JSON ONLY. No markdown, no code fences, no extra text.
 Use exactly this shape:
 {"summary": string (2-3 sentences),
@@ -51,7 +55,7 @@ function normalise(parsed) {
 
 // One request to OpenRouter with the given model.
 // Throws on any problem (HTTP error, bad JSON, wrong shape).
-async function callModel(model, teamName, comments) {
+async function callModel(model, teamName, comments, scoreSummary) {
   const response = await fetch(`${config.aiBaseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
@@ -106,9 +110,10 @@ function mockFeedback(comments, reason) {
   };
 }
 
-// Main function used by routes/feedback.js.
+// Main function used by services/feedback.js.
+// scoreSummary is optional text like "average 7.4/10, rank 2 of 5; Design 8/10, ...".
 // Returns { summary, strengths, improvements, sentiment: {label, score}, source: 'ai'|'mock' }
-async function generateTeamFeedback(teamName, comments) {
+async function generateTeamFeedback(teamName, comments, scoreSummary = '') {
   if (comments.length === 0) {
     return mockFeedback(comments, 'no judge comments to summarise');
   }
@@ -124,7 +129,7 @@ async function generateTeamFeedback(teamName, comments) {
   for (const model of models) {
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        const result = await callModel(model, teamName, comments);
+        const result = await callModel(model, teamName, comments, scoreSummary);
         return { ...result, source: 'ai' };
       } catch (err) {
         console.error(`[ai] ${model} attempt ${attempt} for "${teamName}" failed: ${err.message}`);

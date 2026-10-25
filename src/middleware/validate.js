@@ -84,6 +84,21 @@ function cleanMembers(members) {
   return members.map((m) => m.trim());
 }
 
+// Optional access code chosen by the admin (judges and teams). Codes are matched
+// case-insensitively, so we store them in upper case.
+// Returns the cleaned code, undefined if none was given, or null if it is invalid.
+function cleanCode(code) {
+  if (code === undefined || code === null || (typeof code === 'string' && code.trim() === '')) return undefined;
+  if (typeof code !== 'string' || !/^[A-Za-z0-9_-]{4,30}$/.test(code.trim())) return null;
+  return code.trim().toUpperCase();
+}
+const CODE_RULE = 'code must be 4-30 letters, digits, - or _';
+
+// Admin usernames: 3-30 letters, digits, dot, dash or underscore.
+function isValidUsername(username) {
+  return typeof username === 'string' && /^[A-Za-z0-9_.-]{3,30}$/.test(username.trim());
+}
+
 const EVENT_STATUSES = ['draft', 'live', 'closed'];
 
 module.exports = {
@@ -94,5 +109,8 @@ module.exports = {
   validateRubric,
   cleanRubric,
   cleanMembers,
+  cleanCode,
+  CODE_RULE,
+  isValidUsername,
   EVENT_STATUSES,
 };

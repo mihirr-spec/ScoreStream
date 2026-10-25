@@ -90,8 +90,8 @@ before(async () => {
 
   const judge1 = await api('POST', `/api/events/${eventId}/judges`, { token: adminToken, body: { name: 'Judge 1' } });
   const judge2 = await api('POST', `/api/events/${eventId}/judges`, { token: adminToken, body: { name: 'Judge 2' } });
-  judgeToken = (await api('POST', '/api/auth/judge-login', { body: { code: judge1.body.code } })).body.token;
-  judge2Token = (await api('POST', '/api/auth/judge-login', { body: { code: judge2.body.code } })).body.token;
+  judgeToken = (await api('POST', '/api/auth/judge-login', { body: { name: 'Judge 1', code: judge1.body.code } })).body.token;
+  judge2Token = (await api('POST', '/api/auth/judge-login', { body: { name: 'judge 2', code: judge2.body.code } })).body.token;
 });
 
 after(async () => {
@@ -230,4 +230,61 @@ test('6. generate AI feedback for a team -> summary + sentiment saved (mock)', a
   assert.ok(saved.summary.length > 0);
   assert.ok(['positive', 'neutral', 'negative'].includes(saved.sentiment.label));
   assert.equal(saved.source, 'mock');
+});
+
+test('extra: judge must give the right name with a chosen code', async () => {
+  const created = await api('POST', `/api/events/${eventId}/judges`, { token: adminToken, body: { name: 'Prof Mehta', code: 'panel-07' } });
+  assert.equal(created.status, 201);
+  assert.equal(created.body.code, 'PANEL-07');
+
+  // Same code again -> refused by the unique codeHash index.
+  const clash = await api('POST', `/api/events/${eventId}/judges`, { token: adminToken, body: { name: 'Someone', code: 'PANEL-07' } });
+  assert.equal(clash.status, 409);
+
+  assert.equal((await api('POST', '/api/auth/judge-login', { body: { name: 'Wrong Name', code: 'PANEL-07' } })).status, 401);
+  const ok = await api('POST', '/api/auth/judge-login', { body: { name: 'prof mehta', code: 'panel-07' } });
+  assert.equal(ok.status, 200);
+  const me = await api('GET', '/api/judge/me', { token: ok.body.token });
+  assert.equal(me.body.event.name, 'Test Event');
+});
+
+test('extra: registered admins only see and manage their own events', async () => {
+  const reg = await api('POST', '/api/auth/admin-register', { body: { username: 'organiser1', password: 'longpassword' } });
+  assert.equal(reg.status, 201);
+  const dup = await api('POST', '/api/auth/admin-register', { body: { username: 'Organiser1', password: 'longpassword' } });
+  assert.equal(dup.status, 409);
+  assert.equal((await api('POST', '/api/auth/admin-login', { body: { username: 'organiser1', password: 'wrong-password' } })).status, 401);
+  const token = (await api('POST', '/api/auth/admin-login', { body: { username: 'ORGANISER1', password: 'longpassword' } })).body.token;
+
+  // New admin starts with no events and can't open someone else's.
+  assert.equal((await api('GET', '/api/events', { token })).body.length, 0);
+  assert.equal((await api('GET', `/api/events/${eventId}`, { token })).status, 403);
+  assert.equal((await api('DELETE', `/api/events/${eventId}`, { token })).status, 403);
+
+  const mine = await api('POST', '/api/events', {
+    token,
+    body: { name: 'My Event', rubric: [{ key: 'idea', label: 'Idea', max: 10, weight: 1 }] },
+  });
+  assert.equal(mine.status, 201);
+  const list = (await api('GET', '/api/events', { token })).body;
+  assert.deepEqual(list.map((e) => e.name), ['My Event']);
+
+  // Bulk import (as sent by the Excel import): duplicates and bad rows are skipped.
+  const imported = await api('POST', `/api/events/${mine.body._id}/teams/import`, {
+    token,
+    body: {
+      teams: [
+        { name: 'Alpha', members: ['A1', 'A2'] },
+        { name: 'Beta', members: [], code: 'BETA-01' },
+        { name: 'alpha', members: [] },
+        { name: '', members: [] },
+      ],
+    },
+  });
+  assert.equal(imported.status, 201);
+  assert.equal(imported.body.imported, 2);
+  assert.equal(imported.body.skipped.length, 2);
+  assert.equal(imported.body.teams[1].code, 'BETA-01');
+  assert.equal((await api('POST', '/api/auth/team-login', { body: { code: 'beta-01' } })).status, 200);
+  assert.equal(await getDb().collection('teams').countDocuments({ eventId: new ObjectId(mine.body._id) }), 2);
 });

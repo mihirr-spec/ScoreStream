@@ -3,7 +3,7 @@
 const express = require('express');
 const { getDb } = require('../db');
 const { requireAdmin, assertEventAccess, requireJudge, sha256, generateCode } = require('../middleware/auth');
-const { httpError, parseId, isNonEmptyString } = require('../middleware/validate');
+const { httpError, parseId, isNonEmptyString, cleanCode, CODE_RULE } = require('../middleware/validate');
 const { recomputeLeaderboard } = require('../services/leaderboard');
 
 const router = express.Router();
@@ -12,14 +12,14 @@ const router = express.Router();
 async function findJudgeForAdmin(req, judgeId) {
   const judge = await getDb().collection('judges').findOne({ _id: judgeId }, { projection: { codeHash: 0 } });
   if (!judge) throw httpError(404, 'Judge not found');
-  assertEventAccess(req, judge.eventId);
+  await assertEventAccess(req, judge.eventId);
   return judge;
 }
 
 // GET /api/events/:eventId/judges  -> never returns codeHash
 router.get('/events/:eventId/judges', requireAdmin, async (req, res) => {
   const eventId = parseId(req.params.eventId, 'event id');
-  assertEventAccess(req, eventId);
+  await assertEventAccess(req, eventId);
   const judges = await getDb()
     .collection('judges')
     .find({ eventId }, { projection: { codeHash: 0 } }) // projection 0 = leave this field out
@@ -28,23 +28,37 @@ router.get('/events/:eventId/judges', requireAdmin, async (req, res) => {
   res.json(judges);
 });
 
-// POST /api/events/:eventId/judges  { name }  -> returns the plain code ONCE
+// POST /api/events/:eventId/judges  { name, code? }  -> returns the plain code ONCE
+// The admin may choose the code (e.g. "PANEL-01"); otherwise a random one is made.
 router.post('/events/:eventId/judges', requireAdmin, async (req, res) => {
   const db = getDb();
   const eventId = parseId(req.params.eventId, 'event id');
-  assertEventAccess(req, eventId);
-  const { name } = req.body || {};
+  await assertEventAccess(req, eventId);
+  const { name, code: chosenCode } = req.body || {};
   if (!isNonEmptyString(name, 100)) throw httpError(400, 'name is required (max 100 characters)');
+  const customCode = cleanCode(chosenCode);
+  if (customCode === null) throw httpError(400, CODE_RULE);
 
   const event = await db.collection('events').findOne({ _id: eventId });
   if (!event) throw httpError(404, 'Event not found');
 
-  // Random 8-character code, e.g. "4F9A1C2B".
-  const code = generateCode();
+  // Judges log in with their name, so two judges of one event can't share a name.
+  const sameName = await db.collection('judges').findOne({ eventId, name: name.trim() }, { collation: { locale: 'en', strength: 2 } });
+  if (sameName) throw httpError(409, `There is already a judge called "${sameName.name}" in this event`);
+
+  // The admin's code, or a random 8-character one, e.g. "4F9A1C2B".
+  const code = customCode || generateCode();
 
   // Store ONLY the hash. The plain code is returned in this response and then forgotten.
   const judge = { eventId, name: name.trim(), codeHash: sha256(code) };
-  const result = await db.collection('judges').insertOne(judge);
+  let result;
+  try {
+    result = await db.collection('judges').insertOne(judge);
+  } catch (err) {
+    // The unique codeHash index: some judge (in any event) already uses this code.
+    if (err.code === 11000) throw httpError(409, 'That code is already in use - choose a different one');
+    throw err;
+  }
 
   res.status(201).json({
     _id: result.insertedId,
