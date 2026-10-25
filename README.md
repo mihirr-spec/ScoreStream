@@ -65,7 +65,7 @@ writes AI feedback for every team: the model merges the judges' short notes (e.g
 downloads the event's teams with codes, ranks and averages.
 
 **Submissions:** in each event a team can share its **GitHub repo** link and upload its **slides**
-(PDF, PPT or PPTX, up to 20 MB) until the event ends. Judges see both on the team's scoring card, and the
+(PDF, PowerPoint, Word, Excel, CSV or image, up to 20 MB) until the event ends. Judges preview both inside the scoring card, and the
 admin sees them in the event's team list. Slide files are stored in MongoDB with **GridFS**
 (`slides.files` + `slides.chunks`), so no separate file server is needed and files survive redeploys.
 
