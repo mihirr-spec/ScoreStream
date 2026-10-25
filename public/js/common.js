@@ -119,28 +119,170 @@ function uploadFile(path, file, role, onProgress) {
   });
 }
 
-// Downloads a protected file (it needs the login token, so a plain link won't do).
-// PDFs open in a new tab; other files (e.g. .pptx) are saved.
-async function downloadFile(path, role) {
+// Fetches a protected file (it needs the login token, so a plain link won't do).
+async function fetchFile(path, role) {
   const res = await fetch(path, { headers: { Authorization: `Bearer ${auth.get(role)}` } });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    throw new Error(data.error || 'Download failed');
+    if (res.status === 401) logout(role);
+    throw new Error(data.error || 'Could not open the file');
   }
-  const blob = await res.blob();
-  const name = (res.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/)?.[1] || 'slides';
+  return res.blob();
+}
+
+function saveBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
-  if (blob.type === 'application/pdf') {
-    window.open(url, '_blank', 'noopener');
-  } else {
-    const link = el('a');
-    link.href = url;
-    link.download = name;
-    document.body.append(link);
-    link.click();
-    link.remove();
-  }
+  const link = el('a');
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+// SheetJS reads and writes .xlsx/.xls/.csv in the browser. It is only downloaded
+// the first time it is needed (Excel import/export, or viewing a spreadsheet).
+let sheetJs = null;
+function loadSheetJs() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  if (!sheetJs) {
+    sheetJs = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      script.onload = () => resolve(window.XLSX);
+      script.onerror = () => {
+        sheetJs = null;
+        reject(new Error('Could not load the Excel library. Check your internet connection.'));
+      };
+      document.head.append(script);
+    });
+  }
+  return sheetJs;
+}
+
+// ---------- In-page file viewer ----------
+// openViewer({ path, role, filename, size, title }) shows an uploaded file over the page:
+//   PDF            -> the browser's own PDF viewer
+//   PNG / JPG      -> the image
+//   Excel / CSV    -> SheetJS turns each sheet into a table (one tab per sheet)
+//   PowerPoint/Word-> Microsoft's Office viewer (browsers can't draw these themselves).
+//                     It fetches the file through a 15-minute view link from the server.
+const OFFICE_TYPES = ['ppt', 'pptx', 'doc', 'docx'];
+const SHEET_TYPES = ['xls', 'xlsx', 'csv'];
+const IMAGE_TYPES = ['png', 'jpg', 'jpeg'];
+
+function openViewer({ path, role, filename, size, title }) {
+  const ext = (filename.split('.').pop() || '').toLowerCase();
+  const urls = []; // object URLs to free when the viewer closes
+  let blobPromise = null;
+  const getBlob = () => (blobPromise ||= fetchFile(path, role));
+
+  const backdrop = el('div', null, 'viewer-backdrop');
+  const box = el('div', null, 'viewer');
+  box.setAttribute('role', 'dialog');
+  box.setAttribute('aria-modal', 'true');
+  box.setAttribute('aria-label', `Preview of ${filename}`);
+
+  const head = el('div', null, 'viewer-head');
+  const name = el('div', null, 'viewer-name');
+  name.append(el('strong', title || filename), el('span', `${filename}${size ? `  ·  ${fileSize(size)}` : ''}`));
+  const actions = el('div', null, 'action-row');
+  const download = el('button', 'Download', 'secondary');
+  download.type = 'button';
+  download.addEventListener('click', () => safely(async () => saveBlob(await getBlob(), filename)));
+  const close = el('button', '✕', 'icon-button viewer-close');
+  close.type = 'button';
+  close.setAttribute('aria-label', 'Close preview');
+  actions.append(download, close);
+  head.append(name, actions);
+
+  const body = el('div', null, 'viewer-body');
+  body.append(el('p', 'Loading preview...', 'viewer-msg'));
+  box.append(head, body);
+  backdrop.append(box);
+  document.body.append(backdrop);
+  document.body.classList.add('no-scroll');
+  close.focus();
+
+  function shut() {
+    backdrop.remove();
+    document.body.classList.remove('no-scroll');
+    document.removeEventListener('keydown', onKey);
+    urls.forEach((u) => URL.revokeObjectURL(u));
+  }
+  function onKey(e) {
+    if (e.key === 'Escape') shut();
+  }
+  close.addEventListener('click', shut);
+  backdrop.addEventListener('click', (e) => {
+    if (e.target === backdrop) shut();
+  });
+  document.addEventListener('keydown', onKey);
+
+  const frame = (src) => {
+    const iframe = el('iframe', null, 'viewer-frame');
+    iframe.title = filename;
+    iframe.src = src;
+    return iframe;
+  };
+  const message = (text) => {
+    const p = el('div', null, 'viewer-msg');
+    p.append(el('p', text));
+    const again = el('button', 'Download instead', 'primary');
+    again.type = 'button';
+    again.addEventListener('click', () => download.click());
+    p.append(again);
+    return p;
+  };
+
+  (async () => {
+    if (ext === 'pdf' || IMAGE_TYPES.includes(ext)) {
+      const url = URL.createObjectURL(await getBlob());
+      urls.push(url);
+      if (ext === 'pdf') body.replaceChildren(frame(url));
+      else {
+        const img = el('img', null, 'viewer-image');
+        img.src = url;
+        img.alt = filename;
+        body.replaceChildren(img);
+      }
+    } else if (SHEET_TYPES.includes(ext)) {
+      const [XLSX, blob] = await Promise.all([loadSheetJs(), getBlob()]);
+      const book = XLSX.read(await blob.arrayBuffer(), { type: 'array' });
+      const tabs = el('div', null, 'viewer-tabs');
+      // The table goes in a sandboxed iframe: file contents can never run as page code.
+      const sheet = el('iframe', null, 'viewer-frame');
+      sheet.title = filename;
+      sheet.setAttribute('sandbox', '');
+      const show = (sheetName) => {
+        for (const t of tabs.children) t.classList.toggle('active', t.textContent === sheetName);
+        const style =
+          '<style>body{font:13px system-ui,sans-serif;margin:0;padding:12px;color:#102a43}table{border-collapse:collapse}' +
+          'td{border:1px solid #d6e2ed;padding:5px 9px;white-space:nowrap}tr:first-child td{background:#eaf3ff;font-weight:700}</style>';
+        sheet.srcdoc = style + XLSX.utils.sheet_to_html(book.Sheets[sheetName], { header: '', footer: '' });
+      };
+      for (const sheetName of book.SheetNames) {
+        const tab = el('button', sheetName, 'tab');
+        tab.type = 'button';
+        tab.addEventListener('click', () => show(sheetName));
+        tabs.append(tab);
+      }
+      body.replaceChildren(...(book.SheetNames.length > 1 ? [tabs] : []), sheet);
+      show(book.SheetNames[0]);
+    } else if (OFFICE_TYPES.includes(ext)) {
+      // Microsoft's servers must download the file, so this can't work on localhost.
+      if (/^(localhost|127\.|\[::1\])/.test(location.hostname)) {
+        body.replaceChildren(message('PowerPoint and Word previews use Microsoft’s Office viewer, which can only open files from the deployed site, not from localhost.'));
+        return;
+      }
+      const { url } = await api('GET', `${path}/link`, undefined, role);
+      body.replaceChildren(frame(`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`));
+      body.append(el('p', 'Preview by Microsoft Office Online. If it stays blank, use Download.', 'viewer-note'));
+    } else {
+      body.replaceChildren(message('This file type cannot be previewed.'));
+    }
+  })().catch((err) => body.replaceChildren(message(err.message || 'Could not open the file')));
 }
 
 // "2400000" -> "2.3 MB"

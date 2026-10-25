@@ -356,7 +356,9 @@ function buildTeamCard(event, team, existing) {
     const slides = el('button', `Slides: ${team.slides.filename}`, 'secondary');
     slides.type = 'button';
     slides.title = fileSize(team.slides.size);
-    slides.addEventListener('click', () => safely(() => downloadFile(`/api/judge/teams/${team._id}/slides`, 'judge')));
+    slides.addEventListener('click', () =>
+      openViewer({ path: `/api/judge/teams/${team._id}/slides`, role: 'judge', filename: team.slides.filename, size: team.slides.size, title: team.name })
+    );
     project.append(slides);
   }
   if (!team.githubUrl && !team.slides) project.append(el('span', 'This team has not shared a repo or slides yet.', 'small muted'));

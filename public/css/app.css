@@ -357,3 +357,26 @@ label.busy {
   pointer-events: none;
   opacity: 0.75;
 }
+
+/* ---------- In-page file viewer (openViewer in common.js) ---------- */
+body.no-scroll { overflow: hidden; }
+.viewer-backdrop { position: fixed; inset: 0; z-index: 60; background: rgba(16, 42, 67, 0.55); display: grid; place-items: center; padding: 18px; }
+.viewer { width: min(100%, 1180px); height: min(100%, 860px); background: var(--surface); border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 25px 70px rgba(16, 42, 67, 0.25); }
+.viewer-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.viewer-name { display: flex; flex-direction: column; min-width: 0; }
+.viewer-name strong { font-size: 15px; color: var(--navy); }
+.viewer-name span { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.viewer-close { font-size: 15px; }
+.viewer-body { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--surface-2); }
+.viewer-frame { flex: 1; width: 100%; border: 0; background: #fff; }
+.viewer-image { max-width: 100%; max-height: 100%; margin: auto; object-fit: contain; padding: 12px; }
+.viewer-msg { margin: auto; text-align: center; color: var(--muted); padding: 24px; max-width: 460px; }
+.viewer-msg p { margin: 0 0 14px; line-height: 1.5; }
+.viewer-note { margin: 0; padding: 7px 14px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); }
+.viewer-tabs { display: flex; gap: 4px; padding: 8px 12px 0; overflow-x: auto; }
+.viewer-tabs .tab { padding: 7px 12px; border-radius: 8px 8px 0 0; font-size: 12px; font-weight: 700; color: var(--secondary-text); background: transparent; border: 1px solid transparent; white-space: nowrap; }
+.viewer-tabs .tab.active { background: #fff; border-color: var(--line); border-bottom-color: #fff; color: var(--blue-text); }
+@media (max-width: 640px) {
+  .viewer-backdrop { padding: 0; }
+  .viewer { border-radius: 0; height: 100%; }
+}

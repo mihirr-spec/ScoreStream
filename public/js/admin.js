@@ -529,7 +529,9 @@ async function loadTeams() {
       const slides = el('button', 'Slides', 'tiny-button');
       slides.type = 'button';
       slides.title = team.slides.filename;
-      slides.addEventListener('click', () => safely(() => downloadFile(`/api/teams/${team._id}/slides`, 'admin')));
+      slides.addEventListener('click', () =>
+        openViewer({ path: `/api/teams/${team._id}/slides`, role: 'admin', filename: team.slides.filename, size: team.slides.size, title: team.name })
+      );
       sub.append('  ·  ', slides);
     }
     list.append(
@@ -662,23 +664,6 @@ $('judge-form').addEventListener('submit', (e) => {
 // ---------- Excel: invite by team codes, export teams ----------
 // SheetJS reads and writes .xlsx/.xls/.csv in the browser. It is only downloaded
 // the first time the admin imports or exports.
-let sheetJs = null;
-function loadSheetJs() {
-  if (window.XLSX) return Promise.resolve(window.XLSX);
-  if (!sheetJs) {
-    sheetJs = new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-      script.onload = () => resolve(window.XLSX);
-      script.onerror = () => {
-        sheetJs = null;
-        reject(new Error('Could not load the Excel library. Check your internet connection.'));
-      };
-      document.head.append(script);
-    });
-  }
-  return sheetJs;
-}
 
 // Saves rows (array of objects) as an .xlsx file.
 async function downloadSheet(rows, sheetName, fileName) {

@@ -292,6 +292,17 @@ test('extra: a team shares its repo and slides, and its judges can open them', a
   assert.equal(download.status, 200);
   assert.deepEqual(Buffer.from(await download.arrayBuffer()), bytes);
 
+  // A view link (for Microsoft's Office viewer) opens the file without a login,
+  // but its token is useless anywhere else and a tampered one is refused.
+  const link = await api('GET', `/api/judge/teams/${teamA}/slides/link`, { token: judgeToken });
+  assert.equal(link.status, 200);
+  const viaLink = await fetch(link.body.url);
+  assert.equal(viaLink.status, 200);
+  assert.deepEqual(Buffer.from(await viaLink.arrayBuffer()), bytes);
+  const fileToken = new URL(link.body.url).pathname.split('/')[3];
+  assert.equal((await api('GET', `/api/judge/events/${eventId}`, { token: fileToken })).status, 403);
+  assert.equal((await fetch(link.body.url.replace(fileToken, `${fileToken}x`))).status, 401);
+
   // The admin can open it too, and the team's results page shows the submission.
   const adminDownload = await fetch(`${baseUrl}/api/teams/${teamA}/slides`, { headers: { Authorization: `Bearer ${adminToken}` } });
   assert.equal(adminDownload.status, 200);

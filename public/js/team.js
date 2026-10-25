@@ -10,6 +10,7 @@ let me = null; // { team, events, invitations } from /api/team/me
 let liveSource = null;
 let openEventId = null;
 let uploading = false; // true while slides are being sent
+let lastSubmission = null; // the open event's submission, for the viewer
 const shownPopups = new Set(); // invitations already shown in the pop-up this visit
 
 if (new URLSearchParams(location.search).get('welcome') === '1') $('welcome-banner').classList.remove('hidden');
@@ -304,13 +305,14 @@ function showSubmission(event, submission) {
     current.append('Judges see: ', link);
   } else current.append('No repository shared yet.');
 
+  lastSubmission = submission;
   // While a file is being sent, live refreshes leave the upload status alone.
   if (uploading) return;
   const slides = submission.slides;
   $('slides-current').textContent = slides
     ? `${slides.filename}  ·  ${fileSize(slides.size)}  ·  uploaded ${new Date(slides.uploadedAt).toLocaleString()}`
     : 'No slides uploaded yet.';
-  $('slides-upload-label').textContent = slides ? 'Replace slides' : 'Upload slides';
+  $('slides-upload-label').textContent = slides ? 'Replace file' : 'Upload file';
   $('slides-upload-label').classList.toggle('hidden', locked);
   $('slides-open').classList.toggle('hidden', !slides);
   $('slides-remove').classList.toggle('hidden', !slides || locked);
@@ -350,7 +352,10 @@ $('slides-file').addEventListener('change', (e) =>
   })
 );
 
-$('slides-open').addEventListener('click', () => safely(() => downloadFile(`/api/team/events/${openEventId}/slides`, 'team')));
+$('slides-open').addEventListener('click', () => {
+  const { slides } = lastSubmission;
+  openViewer({ path: `/api/team/events/${openEventId}/slides`, role: 'team', filename: slides.filename, size: slides.size });
+});
 $('slides-remove').addEventListener('click', () =>
   safely(async () => {
     await api('DELETE', `/api/team/events/${openEventId}/slides`, undefined, 'team');

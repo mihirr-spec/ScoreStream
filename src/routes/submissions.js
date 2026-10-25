@@ -1,5 +1,6 @@
 // Submissions: each team can share a GitHub repo link and upload its slides
-// (PDF / PPT / PPTX) for every event it is in. Judges see both while scoring.
+// (PDF, PowerPoint, Word, Excel/CSV or an image) for every event it is in.
+// Judges see both while scoring, in the in-page viewer (public/js/common.js).
 //
 // The slide FILES are stored in MongoDB itself with GridFS: the file is split into
 // 255 KB chunks in "slides.chunks", and "slides.files" holds its name, size and type.
@@ -8,10 +9,12 @@
 // points at the file (slides.fileId) and holds the repo URL.
 
 const path = require('path');
+const jwt = require('jsonwebtoken');
 const { Transform } = require('stream');
 const { pipeline } = require('stream/promises');
 const express = require('express');
 const { GridFSBucket } = require('mongodb');
+const config = require('../config');
 const { getDb } = require('../db');
 const { requireAdmin, assertEventAccess, requireJudge, findJudgeSeat, requireTeam } = require('../middleware/auth');
 const { httpError, parseId } = require('../middleware/validate');
@@ -23,7 +26,16 @@ const SLIDE_TYPES = {
   '.pdf': 'application/pdf',
   '.ppt': 'application/vnd.ms-powerpoint',
   '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  '.doc': 'application/msword',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.xls': 'application/vnd.ms-excel',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.csv': 'text/csv',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
 };
+const TYPE_LIST = 'PDF, PowerPoint, Word, Excel, CSV, PNG or JPG';
 // https://github.com/owner/repo (optionally with a deeper path like /tree/main)
 const GITHUB_URL = /^https:\/\/(www\.)?github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(\/[^\s]*)?$/;
 
@@ -61,8 +73,22 @@ async function sendSlides(res, teamId) {
   const { fileId, filename, contentType, size } = submission.slides;
   res.setHeader('Content-Type', contentType);
   res.setHeader('Content-Length', size);
-  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
   await pipeline(slidesBucket().openDownloadStream(fileId), res);
+}
+
+// PowerPoint and Word files are shown with Microsoft's Office viewer, which has to
+// fetch the file itself - without our login token. So a signed-in user can ask for a
+// VIEW LINK: a URL holding a token that opens only this one file, for 15 minutes.
+// (role 'file' means this token can never pass requireAdmin/requireJudge/requireTeam.)
+async function viewLink(req, teamId) {
+  const submission = await getDb().collection('submissions').findOne({ teamId }, { projection: { slides: 1 } });
+  if (!submission || !submission.slides) throw httpError(404, 'No slides uploaded yet');
+  const token = jwt.sign({ role: 'file', teamId: teamId.toString() }, config.jwtSecret, { expiresIn: '15m' });
+  // Behind Render's proxy the original protocol is in x-forwarded-proto.
+  const origin = `${req.get('x-forwarded-proto') || req.protocol}://${req.get('host')}`;
+  // The file name at the end tells the Office viewer what kind of file it is.
+  return { url: `${origin}/api/files/${token}/${encodeURIComponent(submission.slides.filename)}` };
 }
 
 // Deletes a team's submission and its file (used when a team leaves or an event is deleted).
@@ -103,7 +129,7 @@ router.put('/team/events/:eventId/slides', requireTeam, async (req, res) => {
 
   const original = String(req.query.name || '');
   const ext = path.extname(original).toLowerCase();
-  if (!SLIDE_TYPES[ext]) throw httpError(400, 'Upload slides as a .pdf, .ppt or .pptx file');
+  if (!SLIDE_TYPES[ext]) throw httpError(400, `Upload a ${TYPE_LIST} file`);
   const declared = Number(req.headers['content-length']);
   if (!declared) throw httpError(400, 'The file is empty');
   if (declared > MAX_BYTES) throw httpError(413, 'Slides must be 20 MB or smaller');
@@ -159,22 +185,48 @@ router.get('/team/events/:eventId/slides', requireTeam, async (req, res) => {
 
 // ---------- Judge + admin downloads ----------
 
-// GET /api/judge/teams/:teamId/slides  -> a judge opens a team's slides (events they judge only)
-router.get('/judge/teams/:teamId/slides', requireJudge, async (req, res) => {
+// GET /api/team/events/:eventId/slides/link  -> a view link for the Office viewer
+router.get('/team/events/:eventId/slides/link', requireTeam, async (req, res) => {
+  const team = await teamInEvent(req);
+  res.json(await viewLink(req, team._id));
+});
+
+// A judge may open a team's slides only in events they judge.
+async function judgeTeam(req) {
   const teamId = parseId(req.params.teamId, 'team id');
   const team = await getDb().collection('teams').findOne({ _id: teamId }, { projection: { eventId: 1 } });
   if (!team) throw httpError(404, 'Team not found');
   await findJudgeSeat(req, team.eventId);
-  await sendSlides(res, teamId);
-});
+  return teamId;
+}
 
-// GET /api/teams/:teamId/slides  -> the admin opens a team's slides
-router.get('/teams/:teamId/slides', requireAdmin, async (req, res) => {
+// The admin may open a team's slides only in their own events.
+async function adminTeam(req) {
   const teamId = parseId(req.params.teamId, 'team id');
   const team = await getDb().collection('teams').findOne({ _id: teamId }, { projection: { eventId: 1 } });
   if (!team) throw httpError(404, 'Team not found');
   await assertEventAccess(req, team.eventId);
-  await sendSlides(res, teamId);
+  return teamId;
+}
+
+// GET /api/judge/teams/:teamId/slides (+ /link)  -> a judge opens a team's slides
+router.get('/judge/teams/:teamId/slides', requireJudge, async (req, res) => sendSlides(res, await judgeTeam(req)));
+router.get('/judge/teams/:teamId/slides/link', requireJudge, async (req, res) => res.json(await viewLink(req, await judgeTeam(req))));
+
+// GET /api/teams/:teamId/slides (+ /link)  -> the admin opens a team's slides
+router.get('/teams/:teamId/slides', requireAdmin, async (req, res) => sendSlides(res, await adminTeam(req)));
+router.get('/teams/:teamId/slides/link', requireAdmin, async (req, res) => res.json(await viewLink(req, await adminTeam(req))));
+
+// GET /api/files/:token/:filename  -> the file behind a view link (no login; the token is the permission)
+router.get('/files/:token/:filename', async (req, res) => {
+  let payload;
+  try {
+    payload = jwt.verify(req.params.token, config.jwtSecret);
+  } catch {
+    throw httpError(401, 'This view link has expired. Open the file again from ScoreStream.');
+  }
+  if (payload.role !== 'file') throw httpError(401, 'Not a file link');
+  await sendSlides(res, parseId(payload.teamId, 'team id'));
 });
 
 module.exports = { router, publicSubmission, deleteSubmissions };
