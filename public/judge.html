@@ -12,7 +12,7 @@
     try { if (localStorage.getItem('theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch (e) {}
   </script>
   <link rel="icon" type="image/png" href="img/favicon.png">
-  <link rel="stylesheet" href="css/app.css?v=13">
+  <link rel="stylesheet" href="css/app.css?v=14">
 </head>
 <body>
   <aside class="sidebar" aria-label="Primary sidebar">
@@ -21,14 +21,14 @@
       <span class="brand-name">ScoreStream</span>
     </a>
     <nav aria-label="Main navigation" id="side-nav">
-      <button type="button" class="nav-item active" data-section="Overview" data-target="top" aria-current="page">
+      <a class="nav-item" href="#overview" data-nav="overview">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
         <span>Overview</span>
-      </button>
-      <button type="button" class="nav-item" data-section="Score teams" data-target="teams-section">
+      </a>
+      <a class="nav-item" href="#score" data-nav="score">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg>
         <span>Score teams</span>
-      </button>
+      </a>
       <a class="nav-item" id="leaderboard-link" target="_blank">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 20V11m7 9V4m7 16v-7"/></svg>
         <span>Leaderboard ↗</span>
@@ -69,6 +69,9 @@
       <button type="button" class="secondary" id="refresh-btn">Refresh</button>
     </div>
 
+    <div id="not-live" class="banner hidden"><strong>Scoring is closed.</strong> This event is not live, so marks cannot be submitted or changed.</div>
+
+    <div data-view="overview">
     <section class="kpis" aria-label="Your progress">
       <article class="card kpi">
         <div class="kpi-top"><span>Teams</span><span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M17 5a3 3 0 0 1 0 6m2 4a5 5 0 0 1 2 4v1"/></svg></span></div>
@@ -92,8 +95,19 @@
       </article>
     </section>
 
-    <div id="not-live" class="banner hidden"><strong>Scoring is closed.</strong> This event is not live, so marks cannot be submitted or changed.</div>
+    <section class="card section-card">
+      <div class="section-head">
+        <div>
+          <h2>Your progress</h2>
+          <p class="section-sub">Every team in this event and whether you have scored it.</p>
+        </div>
+        <a class="primary" href="#score">Score teams →</a>
+      </div>
+      <div id="progress-list"></div>
+    </section>
+    </div>
 
+    <div data-view="score" class="hidden">
     <section id="teams-section" class="card section-card">
       <div class="section-head">
         <div>
@@ -111,9 +125,10 @@
       <div class="score-grid" id="team-cards"></div>
       <p id="no-teams" class="empty-row hidden"></p>
     </section>
+    </div>
   </main>
 
-  <script src="js/common.js?v=13"></script>
-  <script src="js/judge.js?v=13"></script>
+  <script src="js/common.js?v=14"></script>
+  <script src="js/judge.js?v=14"></script>
 </body>
 </html>

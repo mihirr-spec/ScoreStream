@@ -213,6 +213,16 @@ tbody tr.selected td { background: var(--blue-soft); }
 .danger-card p { margin: 4px 0 0; font-size: 14px; color: var(--muted); }
 .control-row { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; justify-content: flex-end; }
 
+.event-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 18px; margin-bottom: 20px; }
+.event-bar .field-label { margin: 0; }
+.event-bar select { width: auto; min-width: 220px; max-width: 360px; padding: 9px 11px; }
+.event-bar a { margin-left: auto; }
+.empty-state { text-align: center; padding: 46px 23px; }
+.empty-state h2 { margin: 0 0 6px; font-size: 19px; }
+.empty-state p { margin: 0 0 18px; }
+.person-list.tall { max-height: 520px; }
+.span-2 { grid-column: 1 / -1; }
+.seg button.active { background: var(--blue); color: #fff; }
 .banner { border-radius: 12px; padding: 13px 16px; margin-bottom: 20px; font-size: 14px; background: #fff7e3; color: #7a5600; border: 1px solid #f3dfa5; }
 [data-theme="dark"] .banner { background: #2d2512; color: #f3d48a; border-color: #574719; }
 .banner.info { background: var(--blue-soft); color: var(--blue-text); border-color: transparent; }

@@ -110,8 +110,39 @@ function setupUserBar(role, name) {
   if (btn) btn.addEventListener('click', () => logout(role));
 }
 
-// Judge and Team pages: account menu in the top bar, and sidebar buttons that
-// scroll to a section (data-target) and show its name in the breadcrumb.
+// ---------- Sidebar pages ----------
+// Each sidebar link is its own page: an element with data-view="name", shown at
+// URL #name (so Back, refresh and bookmarks work). views = { name: { title, desc } }.
+// onChange(name) runs after a page is shown.
+function setupViews(views, defaultView, onChange) {
+  function show() {
+    const wanted = location.hash.slice(1);
+    const name = views[wanted] ? wanted : defaultView;
+    for (const section of document.querySelectorAll('[data-view]')) section.classList.toggle('hidden', section.dataset.view !== name);
+    for (const link of document.querySelectorAll('.nav-item[data-nav]')) {
+      const active = link.dataset.nav === name;
+      link.classList.toggle('active', active);
+      if (active) link.setAttribute('aria-current', 'page');
+      else link.removeAttribute('aria-current');
+    }
+    const view = views[name];
+    const crumb = $('section-context');
+    if (crumb) crumb.textContent = view.crumb || view.title;
+    if ($('page-title') && view.title) $('page-title').textContent = view.title;
+    if ($('page-desc') && view.desc !== undefined) $('page-desc').textContent = view.desc;
+    window.scrollTo(0, 0);
+    if (onChange) onChange(name);
+  }
+  window.addEventListener('hashchange', show);
+  show();
+  return (name) => {
+    if (location.hash === `#${name}`) show();
+    else location.hash = name;
+  };
+}
+
+// Judge and Team pages: the account menu in the top bar and the avatar initials.
+// (The sidebar pages themselves are handled by setupViews.)
 function setupShell(name) {
   const avatar = $('avatar');
   if (avatar) avatar.textContent = name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || '?';
@@ -129,23 +160,6 @@ function setupShell(name) {
     document.addEventListener('click', () => {
       menu.classList.add('hidden');
       account.setAttribute('aria-expanded', 'false');
-    });
-  }
-
-  const nav = $('side-nav');
-  if (nav && !nav.dataset.ready) {
-    nav.dataset.ready = '1';
-    nav.addEventListener('click', (e) => {
-      const button = e.target.closest('button.nav-item');
-      if (!button) return;
-      for (const item of nav.querySelectorAll('.nav-item')) {
-        item.classList.toggle('active', item === button);
-        item.removeAttribute('aria-current');
-      }
-      button.setAttribute('aria-current', 'page');
-      $('section-context').textContent = button.dataset.section;
-      if (button.dataset.target === 'top') window.scrollTo({ top: 0, behavior: 'smooth' });
-      else $(button.dataset.target).scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   }
 }

@@ -3,6 +3,16 @@
 
 requireLogin('team');
 
+// Three pages in the sidebar: #overview, #scores (every judge's marks) and #feedback.
+setupViews(
+  {
+    overview: { crumb: 'Overview' },
+    scores: { crumb: "Judges' scores" },
+    feedback: { crumb: 'AI feedback' },
+  },
+  'overview'
+);
+
 let teamId = null;
 let liveSource = null;
 

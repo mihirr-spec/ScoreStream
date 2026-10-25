@@ -1,5 +1,11 @@
-// Admin dashboard: KPI cards and the events table on top, then the selected event's
-// teams, judges, access codes, live rankings, judge progress and AI feedback.
+// Admin dashboard. Each sidebar link is its own page (admin.html#teams etc.):
+//   Overview  - KPI cards + recent events
+//   Events    - every event, with status filters and search
+//   Teams     - roster, Excel import/export, team access codes
+//   Judges    - roster, judge access codes, scoring progress
+//   Rankings  - live ranking, AI feedback, every score
+//   Settings  - event status, rubric, account, end/delete
+// Teams, Judges, Rankings and Settings work on ONE event, chosen in the event bar.
 // Every change goes through our JSON API.
 
 requireLogin('admin');
@@ -9,15 +15,28 @@ const isDemo = Boolean(tokenPayload('admin').demoEventId);
 const adminName = isDemo ? 'Demo admin' : tokenPayload('admin').username || 'Admin';
 setupUserBar('admin', adminName);
 $('avatar').textContent = initials(adminName);
+$('account-name').textContent = adminName;
+$('logout-btn-2').addEventListener('click', () => logout('admin'));
 
 // Shortcut: every admin request sends the admin token.
 const adminApi = (method, path, body) => api(method, path, body, 'admin');
 
+const VIEWS = {
+  overview: { title: 'Administrator Dashboard', crumb: 'Overview', desc: 'Monitor events, teams, judging progress, and feedback in one place.' },
+  events: { title: 'Events', desc: 'Create events, filter them by status and open one to manage it.' },
+  teams: { title: 'Teams', desc: 'Add teams one by one or import them from Excel, and hand out their access codes.' },
+  judges: { title: 'Judges', desc: 'Add judges with the code they sign in with, and track their scoring progress.' },
+  rankings: { title: 'Rankings & Feedback', desc: 'Live standings, every submitted score and the AI feedback for each team.' },
+  settings: { title: 'Settings', desc: 'Event status, scoring rubric and your account.' },
+};
+
 let allEvents = [];
 let activeFilter = 'all';
 let selectedEvent = null;
+let currentView = 'overview';
 let eventTeams = [];
 let eventJudges = [];
+let eventScores = [];
 let liveSource = null;
 // Codes created in this session (shown once, so we keep them here until the page closes).
 let recentCodes = [];
@@ -38,7 +57,7 @@ function pill(status) {
   return el('span', status, `pill ${status}`);
 }
 
-// ---------- Account menu ----------
+// ---------- Menus ----------
 function closeMenus() {
   for (const menu of document.querySelectorAll('.overflow-menu')) menu.classList.add('hidden');
   for (const btn of document.querySelectorAll('[aria-expanded="true"]')) btn.setAttribute('aria-expanded', 'false');
@@ -54,7 +73,7 @@ $('account').addEventListener('click', (e) => {
   toggleMenu($('account'), $('account-menu'));
 });
 document.addEventListener('click', (e) => {
-  if (!e.target.closest('.overflow-wrap')) closeMenus();
+  if (!e.target.closest('.overflow-wrap') || e.target.closest('.overflow-menu a')) closeMenus();
 });
 
 // ---------- Modal (forms and confirmations) ----------
@@ -132,28 +151,25 @@ function input(attrs = {}) {
   return node;
 }
 
-// ---------- Sidebar navigation ----------
-const NEEDS_EVENT = ['teams-card', 'judges-card', 'rankings-card', 'controls-card'];
-$('side-nav').addEventListener('click', (e) => {
-  const button = e.target.closest('.nav-item');
-  if (!button) return;
-  for (const item of document.querySelectorAll('.nav-item')) {
-    item.classList.toggle('active', item === button);
-    item.removeAttribute('aria-current');
-  }
-  button.setAttribute('aria-current', 'page');
-  $('section-context').textContent = button.dataset.section;
+// ---------- Pages ----------
+// Shows or hides the event bar / "no event" box for the current page.
+function updateEventChrome() {
+  const needsEvent = Boolean(document.querySelector(`[data-view="${currentView}"]`).hasAttribute('data-needs-event'));
+  const missing = needsEvent && !selectedEvent;
+  $('event-bar').classList.toggle('hidden', !needsEvent || !selectedEvent);
+  $('no-event').classList.toggle('hidden', !missing);
+  $('no-event-create').classList.toggle('hidden', isDemo);
+  document.querySelector(`[data-view="${currentView}"]`).classList.toggle('hidden', missing);
+  $('create-event').classList.toggle('hidden', isDemo || !['overview', 'events'].includes(currentView));
+}
 
-  let target = button.dataset.target;
-  if (NEEDS_EVENT.includes(target) && !selectedEvent) {
-    toast('Open an event first');
-    target = 'events-section';
-  }
-  if (target === 'top') window.scrollTo({ top: 0, behavior: 'smooth' });
-  else $(target).scrollIntoView({ behavior: 'smooth', block: 'center' });
+const goTo = setupViews(VIEWS, 'overview', (name) => {
+  currentView = name;
+  closeMenus();
+  updateEventChrome();
 });
 
-// ---------- KPIs + events table ----------
+// ---------- KPIs + event tables ----------
 async function loadEvents() {
   allEvents = await adminApi('GET', '/api/events');
   const live = allEvents.filter((e) => e.status === 'live');
@@ -162,7 +178,8 @@ async function loadEvents() {
   $('kpi-teams').textContent = allEvents.reduce((sum, e) => sum + e.teamCount, 0);
   // Every judge should score every team: the gap is what's still pending.
   $('kpi-pending').textContent = live.reduce((sum, e) => sum + Math.max(e.teamCount * e.judgeCount - e.scoreCount, 0), 0);
-  renderEvents();
+  renderEventTables();
+  renderPicker();
 }
 
 function progressOf(event) {
@@ -170,59 +187,83 @@ function progressOf(event) {
   return needed ? Math.min(100, Math.round((event.scoreCount / needed) * 100)) : 0;
 }
 
-function renderEvents() {
-  const query = $('event-search').value.trim().toLowerCase();
-  const rows = $('event-rows');
-  rows.replaceChildren();
-  const visible = allEvents.filter(
-    (e) => (activeFilter === 'all' || e.status === activeFilter) && e.name.toLowerCase().includes(query)
+function eventRow(event) {
+  const row = el('tr');
+  if (selectedEvent && selectedEvent._id === event._id) row.classList.add('selected');
+
+  const status = el('td');
+  status.append(pill(event.status));
+  const progress = el('td');
+  const track = el('span', null, 'progress-track');
+  const fill = el('span', null, 'progress-fill');
+  fill.style.width = `${progressOf(event)}%`;
+  track.append(fill);
+  progress.append(track, `${progressOf(event)}%`);
+
+  const actions = el('td');
+  const open = el('button', 'Open event', 'row-action');
+  open.type = 'button';
+  open.addEventListener('click', () =>
+    safely(async () => {
+      await selectEvent(event._id);
+      goTo('teams');
+    })
   );
 
-  for (const event of visible) {
-    const row = el('tr');
-    if (selectedEvent && selectedEvent._id === event._id) row.classList.add('selected');
-
-    const status = el('td');
-    status.append(pill(event.status));
-    const progress = el('td');
-    const track = el('span', null, 'progress-track');
-    const fill = el('span', null, 'progress-fill');
-    fill.style.width = `${progressOf(event)}%`;
-    track.append(fill);
-    progress.append(track, `${progressOf(event)}%`);
-
-    const actions = el('td');
-    const open = el('button', 'Open event', 'row-action');
-    open.type = 'button';
-    open.addEventListener('click', () => safely(() => selectEvent(event._id, true)));
-
-    const wrap = el('span', null, 'overflow-wrap');
-    const more = el('button', '⋯', 'icon-button');
-    more.type = 'button';
-    more.setAttribute('aria-label', `More actions for ${event.name}`);
-    more.setAttribute('aria-expanded', 'false');
-    const menu = el('span', null, 'overflow-menu hidden');
-    const view = el('a', 'View leaderboard ↗');
-    view.href = `leaderboard.html?event=${event._id}`;
-    view.target = '_blank';
-    menu.append(view);
-    if (!isDemo) {
-      const del = el('button', 'Delete event', 'danger');
-      del.type = 'button';
-      del.addEventListener('click', () => safely(() => deleteEvent(event)));
-      menu.append(del);
-    }
-    more.addEventListener('click', (e) => {
-      e.stopPropagation();
-      toggleMenu(more, menu);
-    });
-    wrap.append(more, menu);
-    actions.append(open, ' ', wrap);
-
-    row.append(el('td', event.name, 'event-name'), status, el('td', event.teamCount), el('td', event.judgeCount), progress, actions);
-    rows.append(row);
+  const wrap = el('span', null, 'overflow-wrap');
+  const more = el('button', '⋯', 'icon-button');
+  more.type = 'button';
+  more.setAttribute('aria-label', `More actions for ${event.name}`);
+  more.setAttribute('aria-expanded', 'false');
+  const menu = el('span', null, 'overflow-menu hidden');
+  const links = [
+    ['Teams', 'teams'],
+    ['Judges', 'judges'],
+    ['Rankings & feedback', 'rankings'],
+    ['Settings', 'settings'],
+  ];
+  for (const [label, view] of links) {
+    const btn = el('button', label);
+    btn.type = 'button';
+    btn.addEventListener('click', () =>
+      safely(async () => {
+        closeMenus();
+        await selectEvent(event._id);
+        goTo(view);
+      })
+    );
+    menu.append(btn);
   }
+  const view = el('a', 'Public leaderboard ↗');
+  view.href = `leaderboard.html?event=${event._id}`;
+  view.target = '_blank';
+  menu.append(view);
+  if (!isDemo) {
+    const del = el('button', 'Delete event', 'danger');
+    del.type = 'button';
+    del.addEventListener('click', () => safely(() => deleteEvent(event)));
+    menu.append(del);
+  }
+  more.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleMenu(more, menu);
+  });
+  wrap.append(more, menu);
+  actions.append(open, ' ', wrap);
 
+  row.append(el('td', event.name, 'event-name'), status, el('td', event.teamCount), el('td', event.judgeCount), progress, actions);
+  return row;
+}
+
+function renderEventTables() {
+  // Overview: the 5 newest events.
+  $('recent-rows').replaceChildren(...allEvents.slice(0, 5).map(eventRow));
+  $('no-recent').classList.toggle('hidden', allEvents.length > 0);
+
+  // Events page: filtered by the status tab and the search box.
+  const query = $('event-search').value.trim().toLowerCase();
+  const visible = allEvents.filter((e) => (activeFilter === 'all' || e.status === activeFilter) && e.name.toLowerCase().includes(query));
+  $('event-rows').replaceChildren(...visible.map(eventRow));
   const none = $('no-events');
   none.classList.toggle('hidden', visible.length > 0);
   none.textContent = allEvents.length === 0 ? 'No events yet. Click "Create Event" to set up your first one.' : 'No events match your search.';
@@ -235,19 +276,33 @@ for (const tab of document.querySelectorAll('.tab')) {
       t.classList.toggle('active', t === tab);
       t.setAttribute('aria-selected', String(t === tab));
     }
-    renderEvents();
+    renderEventTables();
   });
 }
-// The top-bar search and the table search stay in sync.
-for (const [id, otherId] of [['event-search', 'global-search'], ['global-search', 'event-search']]) {
-  $(id).addEventListener('input', () => {
-    $(otherId).value = $(id).value;
-    renderEvents();
-  });
-}
-$('global-search').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') $('events-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+// The top-bar search opens the Events page and stays in sync with its search box.
+$('event-search').addEventListener('input', () => {
+  $('global-search').value = $('event-search').value;
+  renderEventTables();
 });
+$('global-search').addEventListener('input', () => {
+  $('event-search').value = $('global-search').value;
+  renderEventTables();
+  if (currentView !== 'events') goTo('events');
+});
+
+// ---------- Event picker ----------
+function renderPicker() {
+  const picker = $('event-picker');
+  picker.replaceChildren(
+    ...allEvents.map((e) => {
+      const option = el('option', `${e.name}  (${e.status})`);
+      option.value = e._id;
+      return option;
+    })
+  );
+  if (selectedEvent) picker.value = selectedEvent._id;
+}
+$('event-picker').addEventListener('change', () => safely(() => selectEvent($('event-picker').value)));
 
 // ---------- Create event ----------
 function rubricRow(values = {}) {
@@ -268,14 +323,15 @@ function rubricRow(values = {}) {
   remove.type = 'button';
   remove.setAttribute('aria-label', 'Remove criterion');
   remove.addEventListener('click', () => {
+    const parent = row.parentElement;
     row.remove();
-    row.dispatchEvent(new Event('input', { bubbles: true }));
+    parent.dispatchEvent(new Event('input'));
   });
   row.append(remove);
   return row;
 }
 
-$('create-event').addEventListener('click', () => {
+function openCreateEvent() {
   const name = input({ required: true, maxLength: 100, placeholder: 'e.g. Spring Hackathon 2026' });
   const status = el('select');
   for (const [value, label] of [['draft', 'Draft (set up teams and judges first)'], ['live', 'Live (judges can score now)']]) {
@@ -328,82 +384,98 @@ $('create-event').addEventListener('click', () => {
     onSubmit: async () => {
       // The server validates everything again - this form is just a convenience.
       const event = await adminApi('POST', '/api/events', { name: name.value, status: status.value, rubric: readRubric() });
-      toast(`Event "${event.name}" created`);
+      toast(`Event "${event.name}" created - now add its teams`);
       await loadEvents();
-      await selectEvent(event._id, true);
+      await selectEvent(event._id);
+      goTo('teams');
     },
   });
-});
+}
+$('create-event').addEventListener('click', openCreateEvent);
+$('no-event-create').addEventListener('click', openCreateEvent);
 
-// ---------- One selected event ----------
-async function selectEvent(eventId, scroll = false) {
+// ---------- The selected event ----------
+async function selectEvent(eventId) {
+  const changed = !selectedEvent || selectedEvent._id !== eventId;
   selectedEvent = await adminApi('GET', `/api/events/${eventId}`);
   const ev = selectedEvent;
-  $('detail-section').classList.remove('hidden');
-  $('selected-title').textContent = ev.name;
+  try {
+    sessionStorage.setItem('adminEvent', ev._id);
+  } catch {
+    /* storage blocked - the first event is picked next time */
+  }
+  if (changed) recentCodes = [];
+
   $('selected-status').replaceWith(Object.assign(pill(ev.status), { id: 'selected-status' }));
   $('selected-rubric').textContent = ev.rubric.map((r) => `${r.label} ${Math.round(r.weight * 100)}%`).join('  ·  ');
   $('leaderboard-link').href = `leaderboard.html?event=${ev._id}`;
+  renderPicker();
+  renderEventTables();
+  updateEventChrome();
 
-  $('set-draft').classList.toggle('active', ev.status === 'draft');
-  $('set-live').classList.toggle('active', ev.status === 'live');
+  // Settings page
+  for (const status of ['draft', 'live', 'closed']) $(`set-${status}`).classList.toggle('active', ev.status === status);
   $('end-event').disabled = ev.status === 'closed';
   $('end-event').textContent = ev.status === 'closed' ? 'Event ended' : 'End Event';
   $('delete-event').classList.toggle('hidden', isDemo);
   $('controls-text').textContent = {
-    draft: 'The event is a draft: judges cannot score yet. Go live when your teams and judges are ready.',
-    live: 'Judges are scoring now. Ending the event closes scoring, publishes final ranks and writes AI feedback.',
-    closed: 'The event has ended. You can reopen it (Go live) if judges need to change scores.',
+    draft: 'Draft: judges cannot score yet. Go live when your teams and judges are ready.',
+    live: 'Live: judges are scoring now.',
+    closed: 'Closed: final ranks are published. Set it live again if judges need to change scores.',
   }[ev.status];
+  const rubric = $('rubric-list');
+  rubric.replaceChildren();
+  for (const r of ev.rubric) {
+    const row = el('div', null, 'score-row');
+    row.append(el('span', r.label, 'score-label'), el('span', `max ${r.max}  ·  weight ${Math.round(r.weight * 100)}%`, 'score-status'));
+    rubric.append(row);
+  }
+
+  // Rankings page
   $('generate-feedback').disabled = ev.status !== 'closed';
   $('feedback-note').textContent =
     ev.status === 'closed'
       ? 'Written by AI from the judges’ comments. Regenerate if judges changed their comments.'
       : 'Written by AI for every team when you end the event.';
 
-  renderEvents();
-  watchLeaderboard(ev._id);
+  if (changed) watchLeaderboard(ev._id);
+  renderCodes();
   await Promise.all([loadTeams(), loadJudges(), loadRankings(), loadFeedback()]);
-  await loadProgress();
-  if (scroll) $('detail-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  await loadScores();
 }
 
 async function refreshCounts() {
   await loadEvents();
-  await loadProgress();
+  await loadScores();
 }
 
 async function setStatus(status) {
+  if (status === 'closed') return endEvent();
   await adminApi('PATCH', `/api/events/${selectedEvent._id}`, { status });
   await loadEvents();
   await selectEvent(selectedEvent._id);
+  toast(status === 'live' ? 'Event is live - judges can score now' : 'Event moved to draft - judges cannot score');
+}
+for (const status of ['draft', 'live', 'closed']) {
+  $(`set-${status}`).addEventListener('click', () => safely(() => setStatus(status)));
 }
 
-$('set-draft').addEventListener('click', () =>
-  safely(async () => {
-    await setStatus('draft');
-    toast('Event moved to draft - judges can no longer score');
-  })
-);
-$('set-live').addEventListener('click', () =>
-  safely(async () => {
-    await setStatus('live');
-    toast('Event is live - judges can score now');
-  })
-);
-$('end-event').addEventListener('click', () =>
-  safely(async () => {
-    const ok = await confirmModal(
-      'End Event?',
-      'This closes scoring for the selected event, publishes the final ranking and writes AI feedback for every team.',
-      'Confirm End Event'
-    );
-    if (!ok) return;
-    await setStatus('closed');
-    toast('Event ended - writing AI feedback for every team...');
-    watchFeedback(selectedEvent._id);
-  })
-);
+async function endEvent() {
+  if (selectedEvent.status === 'closed') return;
+  const ok = await confirmModal(
+    'End Event?',
+    'This closes scoring for the selected event, publishes the final ranking and writes AI feedback for every team.',
+    'Confirm End Event'
+  );
+  if (!ok) return;
+  await adminApi('PATCH', `/api/events/${selectedEvent._id}`, { status: 'closed' });
+  await loadEvents();
+  await selectEvent(selectedEvent._id);
+  toast('Event ended - writing AI feedback for every team...');
+  goTo('rankings');
+  watchFeedback(selectedEvent._id);
+}
+$('end-event').addEventListener('click', () => safely(endEvent));
 
 async function deleteEvent(event) {
   closeMenus();
@@ -414,9 +486,11 @@ async function deleteEvent(event) {
   if (selectedEvent && selectedEvent._id === event._id) {
     selectedEvent = null;
     if (liveSource) liveSource.close();
-    $('detail-section').classList.add('hidden');
   }
   await loadEvents();
+  if (!selectedEvent && allEvents.length) await selectEvent(allEvents[0]._id);
+  updateEventChrome();
+  if (!selectedEvent) goTo('events');
 }
 $('delete-event').addEventListener('click', () => safely(() => deleteEvent(selectedEvent)));
 
@@ -424,49 +498,61 @@ $('delete-event').addEventListener('click', () => safely(() => deleteEvent(selec
 function rememberCode(kind, name, code, members = []) {
   recentCodes.unshift({ kind, name, code, members });
   renderCodes();
-  $('access-card').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
+// Fills the "Team access codes" (Teams page) and "Judge access codes" (Judges page) cards.
 function renderCodes() {
-  const list = $('code-list');
-  list.replaceChildren();
-  for (const item of recentCodes) {
-    const row = el('div', null, 'access-row');
-    const who = el('div', null, 'access-who');
-    who.append(el('span', item.kind === 'judge' ? 'Judge (name + code)' : 'Team'), item.name);
-    const right = el('div', null, 'action-row');
-    right.style.alignItems = 'center';
-    const copy = el('button', 'Copy', 'tiny-button');
-    copy.type = 'button';
-    copy.addEventListener('click', () =>
-      safely(async () => {
-        await navigator.clipboard.writeText(item.code);
-        copy.textContent = 'Copied';
-        setTimeout(() => (copy.textContent = 'Copy'), 1800);
-      })
+  for (const box of document.querySelectorAll('[data-codes]')) {
+    const kind = box.dataset.codes;
+    const codes = recentCodes.filter((c) => c.kind === kind);
+    box.replaceChildren();
+    if (codes.length === 0) {
+      box.append(el('p', `New codes appear here when you add a ${kind}${kind === 'team' ? ', import a sheet' : ''} or click New code.`, 'empty-text'));
+      continue;
+    }
+    for (const item of codes) {
+      const row = el('div', null, 'access-row');
+      const who = el('div', null, 'access-who');
+      who.append(item.name);
+      if (item.members.length) who.append(el('span', item.members.join(', ')));
+      const right = el('div', null, 'action-row');
+      right.style.alignItems = 'center';
+      const copy = el('button', 'Copy', 'tiny-button');
+      copy.type = 'button';
+      copy.addEventListener('click', () =>
+        safely(async () => {
+          await navigator.clipboard.writeText(item.code);
+          copy.textContent = 'Copied';
+          setTimeout(() => (copy.textContent = 'Copy'), 1800);
+        })
+      );
+      right.append(el('span', item.code, 'code'), copy);
+      row.append(who, right);
+      box.append(row);
+    }
+    const actions = el('div', null, 'action-row');
+    actions.style.marginTop = '14px';
+    const download = el('button', 'Download codes (.xlsx)', 'secondary');
+    download.type = 'button';
+    download.addEventListener('click', () =>
+      safely(() =>
+        downloadSheet(
+          codes.map((c) => (kind === 'team' ? { 'Team name': c.name, Members: c.members.join(', '), Code: c.code } : { Judge: c.name, Code: c.code })),
+          kind === 'team' ? 'Team codes' : 'Judge codes',
+          `${slug(selectedEvent.name)}-${kind}-codes.xlsx`
+        )
+      )
     );
-    right.append(el('span', item.code, 'code'), copy);
-    row.append(who, right);
-    list.append(row);
+    const clear = el('button', 'Clear', 'secondary');
+    clear.type = 'button';
+    clear.addEventListener('click', () => {
+      recentCodes = recentCodes.filter((c) => c.kind !== kind);
+      renderCodes();
+    });
+    actions.append(download, clear);
+    box.append(actions);
   }
-  const has = recentCodes.length > 0;
-  $('code-empty').classList.toggle('hidden', has);
-  $('download-codes').classList.toggle('hidden', !has);
-  $('clear-codes').classList.toggle('hidden', !has);
 }
-$('clear-codes').addEventListener('click', () => {
-  recentCodes = [];
-  renderCodes();
-});
-$('download-codes').addEventListener('click', () =>
-  safely(() =>
-    downloadSheet(
-      recentCodes.map((c) => ({ Type: c.kind === 'judge' ? 'Judge' : 'Team', Name: c.name, Members: c.members.join(', '), Code: c.code })),
-      'Access codes',
-      `${slug(selectedEvent ? selectedEvent.name : 'event')}-access-codes.xlsx`
-    )
-  )
-);
 
 // One row of the team / judge roster, with "New code" and "Delete".
 function personRow(name, subtitle, onReset, onDelete) {
@@ -530,7 +616,7 @@ $('add-team').addEventListener('click', () => {
         members: members.value.split(',').map((m) => m.trim()).filter(Boolean),
         code: code.value,
       });
-      toast(`Team "${team.name}" added`);
+      toast(`Team "${team.name}" added - its code is in Team access codes`);
       rememberCode('team', team.name, team.code, team.members);
       await loadTeams();
       await refreshCounts();
@@ -579,7 +665,7 @@ $('add-judge').addEventListener('click', () => {
     submitLabel: 'Add Judge',
     onSubmit: async () => {
       const judge = await adminApi('POST', `/api/events/${selectedEvent._id}/judges`, { name: name.value, code: code.value });
-      toast(`Judge "${judge.name}" added`);
+      toast(`Judge "${judge.name}" added - their code is in Judge access codes`);
       rememberCode('judge', judge.name, judge.code);
       await loadJudges();
       await refreshCounts();
@@ -673,14 +759,13 @@ $('import-file').addEventListener('change', (e) =>
       for (const s of result.skipped) list.append(el('li', `${s.row ? `Row ${s.row}` : `"${s.name}"`}: ${s.reason}`));
       openModal({
         title: `Imported ${result.imported} team(s)`,
-        text: `${result.skipped.length} row(s) were skipped. The new codes are in the Access codes card.`,
+        text: `${result.skipped.length} row(s) were skipped. The new codes are in Team access codes.`,
         fields: [list],
         submitLabel: 'OK',
         showCancel: false,
       });
     } else {
-      toast(`Imported ${result.imported} team(s) - codes are in the Access codes card`);
-      $('access-card').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      toast(`Imported ${result.imported} team(s) - codes are in Team access codes`);
     }
   })
 );
@@ -735,47 +820,46 @@ function watchLeaderboard(eventId) {
   liveSource.addEventListener('error', () => $('live-flag').classList.add('hidden'));
 }
 
-// ---------- Judge progress + all scores ----------
-let eventScores = [];
-async function loadProgress() {
+// ---------- Scores: judge progress (Judges page) + every score (Rankings page) ----------
+async function loadScores() {
   if (!selectedEvent) return;
   eventScores = await adminApi('GET', `/api/events/${selectedEvent._id}/scores`);
+
   const box = $('judge-progress');
   box.replaceChildren();
   if (eventJudges.length === 0) box.append(el('p', 'Add judges to track their progress.', 'empty-text'));
   for (const judge of eventJudges) {
     const done = eventScores.filter((s) => s.judgeName === judge.name).length;
     const row = el('div', null, 'score-row');
-    row.append(el('span', judge.name, 'score-label'), el('span', `${done} / ${eventTeams.length} complete`, 'score-status'));
+    const progress = el('span', null, 'score-status');
+    const track = el('span', null, 'progress-track');
+    const fill = el('span', null, 'progress-fill');
+    fill.style.width = eventTeams.length ? `${Math.round((done / eventTeams.length) * 100)}%` : '0%';
+    track.append(fill);
+    progress.append(track, `${done} / ${eventTeams.length} complete`);
+    row.append(el('span', judge.name, 'score-label'), progress);
     box.append(row);
   }
-}
 
-$('view-scores').addEventListener('click', () =>
-  safely(async () => {
-    await loadProgress();
-    const wrap = el('div', null, 'table-wrap');
-    const table = el('table');
-    if (eventScores.length === 0) {
-      wrap.append(el('p', 'No scores yet.', 'empty-text'));
-    } else {
-      const head = el('tr');
-      for (const title of ['Team', 'Judge', ...selectedEvent.rubric.map((r) => r.label), 'Total', 'Comment']) head.append(el('th', title));
-      table.append(head);
-      for (const s of eventScores) {
-        const row = el('tr');
-        row.append(el('td', s.teamName, 'event-name'), el('td', s.judgeName));
-        for (const r of selectedEvent.rubric) row.append(el('td', s.criteria[r.key]));
-        const total = el('td');
-        total.append(el('strong', s.total));
-        row.append(total, el('td', s.comment || '-'));
-        table.append(row);
-      }
-      wrap.append(table);
-    }
-    openModal({ title: 'All scores', text: 'Every score, with team and judge names joined by $lookup.', size: 'xwide', fields: [wrap], submitLabel: 'Close', showCancel: false });
-  })
-);
+  const table = $('score-table');
+  table.replaceChildren();
+  if (eventScores.length === 0) {
+    table.append(el('caption', 'No scores yet.', 'empty-row'));
+    return;
+  }
+  const head = el('tr');
+  for (const title of ['Team', 'Judge', ...selectedEvent.rubric.map((r) => r.label), 'Total', 'Comment']) head.append(el('th', title));
+  table.append(head);
+  for (const s of eventScores) {
+    const row = el('tr');
+    row.append(el('td', s.teamName, 'event-name'), el('td', s.judgeName));
+    for (const r of selectedEvent.rubric) row.append(el('td', s.criteria[r.key]));
+    const total = el('td');
+    total.append(el('strong', s.total));
+    row.append(total, el('td', s.comment || '-'));
+    table.append(row);
+  }
+}
 
 // ---------- AI feedback ----------
 async function loadFeedback() {
@@ -827,13 +911,17 @@ $('generate-feedback').addEventListener('click', () =>
 );
 
 // ---------- Start ----------
-if (isDemo) {
-  // Hide what the demo admin is not allowed to do, and open the demo event straight away.
-  $('demo-banner').classList.remove('hidden');
-  $('create-event').classList.add('hidden');
-}
+if (isDemo) $('demo-banner').classList.remove('hidden');
 safely(async () => {
   await loadEvents();
-  if (isDemo) await selectEvent(tokenPayload('admin').demoEventId);
-  else if (allEvents.length === 1) await selectEvent(allEvents[0]._id);
+  // Re-open the event used last time in this tab (or the demo event, or the newest one).
+  let saved = null;
+  try {
+    saved = sessionStorage.getItem('adminEvent');
+  } catch {
+    /* storage blocked */
+  }
+  const start = isDemo ? tokenPayload('admin').demoEventId : allEvents.find((e) => e._id === saved)?._id || allEvents[0]?._id;
+  if (start) await selectEvent(start);
+  updateEventChrome();
 });

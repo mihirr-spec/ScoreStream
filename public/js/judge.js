@@ -3,6 +3,15 @@
 // The page shows a total preview, but the SERVER calculates and stores the real total.
 
 requireLogin('judge');
+
+// Two pages in the sidebar: #overview (progress) and #score (the rating cards).
+const goTo = setupViews(
+  {
+    overview: { crumb: 'Overview' },
+    score: { crumb: 'Score teams' },
+  },
+  'overview'
+);
 $('refresh-btn').addEventListener('click', () => safely(loadDashboard));
 
 // Tabs (All / To score / Scored) and the top-bar search only show or hide cards.
@@ -32,7 +41,7 @@ for (const tab of document.querySelectorAll('.tab')) {
 }
 $('team-search').addEventListener('input', () => {
   applyFilter();
-  $('teams-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  goTo('score');
 });
 
 // Same formula as services/scoring.js - only used for the live preview.
@@ -47,7 +56,6 @@ async function loadDashboard() {
 
   setupUserBar('judge', judge.name);
   setupShell(judge.name);
-  $('section-context').textContent = event.name;
   $('event-name').textContent = event.name;
   $('event-status').replaceChildren(el('span', event.status, `pill ${event.status}`));
   $('leaderboard-link').href = `leaderboard.html?event=${event._id}`;
@@ -60,6 +68,22 @@ async function loadDashboard() {
   $('stat-avg').textContent = myScores.length
     ? (myScores.reduce((sum, s) => sum + s.total, 0) / myScores.length).toFixed(2)
     : '-';
+
+  // Overview page: one row per team, scored or not.
+  const progress = $('progress-list');
+  progress.replaceChildren();
+  if (teams.length === 0) progress.append(el('p', 'No teams in this event yet.', 'empty-text'));
+  for (const team of teams) {
+    const mine = myScores.find((s) => s.teamId === team._id);
+    const row = el('div', null, 'score-row');
+    const left = el('span', team.name, 'score-label');
+    const right = el('span', null, 'action-row');
+    right.style.alignItems = 'center';
+    if (mine) right.append(el('span', `${mine.total} / 10`, 'score-status'));
+    right.append(el('span', mine ? 'scored' : 'not scored', `pill ${mine ? 'live' : 'draft'}`));
+    row.append(left, right);
+    progress.append(row);
+  }
 
   const cards = $('team-cards');
   cards.replaceChildren();
