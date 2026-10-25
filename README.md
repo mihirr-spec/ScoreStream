@@ -50,7 +50,7 @@ Open http://localhost:3000 for the landing page, then **Log in** (one screen, th
 |---|---|---|
 | Admin | **Create an account** on the Administrator tab, or use `ADMIN_USERNAME` + `ADMIN_PASSWORD` from `.env` (sees every event) | Dashboard and Events list. Inside each event: invite judges by their judge code and teams by their team code, watch judging progress live, rankings, AI feedback, and End Event. Registered admins only see their own events |
 | Judge | **Register** on the Judge tab (name, password) to get a permanent judge code. Sign in with **judge code + password**. | Accept or decline invitations, then per event rate the teams one at a time (stars + feedback, repo and slides at hand), then "Submit & next". Scoring locks when the admin ends the event |
-| Team | **Register** on the Student tab (team name, members, password) to get a permanent team code. Sign in with **team code + password**. | Accept or decline invitations, then per event: share a GitHub repo and slides, live rank, average, every judge's marks and comments, and AI feedback once the event ends |
+| Team | **Register** on the Team tab (team name, members, password) to get a permanent team code. Sign in with **team code + password**. | Accept or decline invitations, then per event: share a GitHub repo and slides, live rank, average, every judge's marks and comments, and AI feedback once the event ends |
 
 **How teams and judges join an event:** the admin enters their code, which creates a *pending invitation*. They
 see a pop-up on their dashboard ("*admin* wants to add you to *event*") and accept or decline. Only

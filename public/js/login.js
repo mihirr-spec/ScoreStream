@@ -1,6 +1,6 @@
 // One sign-in screen for all three roles. The selected role decides which
 // API endpoint we call and which page we open afterwards.
-//   Student (team)  -> team code + password, or register a new team
+//   Team            -> team code + password, or register a new team
 //   Judge           -> judge code + password, or register as a judge
 //   Administrator   -> username + password, or create an organiser account
 
@@ -58,7 +58,7 @@ const ROLES = {
   },
 };
 
-// Start on the role from the URL (login.html?role=judge), default Student.
+// Start on the role from the URL (login.html?role=judge), default Team.
 const params = new URLSearchParams(location.search);
 let currentRole = ROLES[params.get('role')] ? params.get('role') : 'team';
 // true = the "register" form of the current role instead of "sign in".
