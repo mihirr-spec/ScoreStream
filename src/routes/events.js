@@ -2,9 +2,10 @@
 
 const express = require('express');
 const { getDb } = require('../db');
-const { requireAdmin, assertEventAccess, denyDemo } = require('../middleware/auth');
+const { requireAdmin, assertEventAccess } = require('../middleware/auth');
 const { recomputeLeaderboard } = require('../services/leaderboard');
 const { generateEventFeedback } = require('../services/feedback');
+const { deleteSubmissions } = require('./submissions');
 const {
   httpError,
   parseId,
@@ -18,8 +19,8 @@ const router = express.Router();
 
 // GET /api/events  -> all events, newest first
 router.get('/events', requireAdmin, async (req, res) => {
-  // A demo admin only sees the demo event, a registered admin only the events they created.
-  const filter = req.demoEventId ? { demo: true } : req.adminId ? { ownerId: req.adminId } : {};
+  // A registered admin only sees the events they created; the .env admin sees all.
+  const filter = req.adminId ? { ownerId: req.adminId } : {};
   // Each event also gets teamCount, judgeCount and scoreCount for the dashboard table.
   // A $lookup with a sub-pipeline that only $counts, so no team/judge documents are copied.
   const countOf = (from) => [
@@ -48,7 +49,6 @@ router.get('/events', requireAdmin, async (req, res) => {
 
 // POST /api/events  { name, rubric, status? }
 router.post('/events', requireAdmin, async (req, res) => {
-  denyDemo(req, 'create new events');
   const { name, rubric, status = 'draft' } = req.body || {};
 
   if (!isNonEmptyString(name, 100)) throw httpError(400, 'name is required (max 100 characters)');
@@ -130,7 +130,6 @@ router.patch('/events/:id', requireAdmin, async (req, res) => {
 // DELETE /api/events/:id  -> deletes the event AND everything that references it.
 // (MongoDB has no "ON DELETE CASCADE" like SQL, so we delete the related documents ourselves.)
 router.delete('/events/:id', requireAdmin, async (req, res) => {
-  denyDemo(req, 'delete the demo event');
   const db = getDb();
   const eventId = parseId(req.params.id, 'event id');
   await assertEventAccess(req, eventId);
@@ -141,6 +140,7 @@ router.delete('/events/:id', requireAdmin, async (req, res) => {
   for (const name of ['teams', 'judges', 'scores', 'leaderboard', 'feedback', 'invitations']) {
     await db.collection(name).deleteMany({ eventId });
   }
+  await deleteSubmissions({ eventId }); // also deletes the slide files from GridFS
   res.json({ message: 'Event and all its data deleted' });
 });
 

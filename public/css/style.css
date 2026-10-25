@@ -434,15 +434,8 @@ input[type="range"] { padding: 0; border: none; height: 6px; accent-color: var(-
 .star-input button:disabled { cursor: not-allowed; transform: none; }
 .podium-spot .stars .star { font-size: 1.25rem; }
 
-/* ---------- Demo accounts ---------- */
-.demo-banner {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
-  background: var(--amber-soft); border: 1px solid #f3dca0; color: #7a5600;
-  border-radius: var(--radius); padding: 12px 16px; margin-bottom: 18px; font-size: 0.92rem;
-}
 .divider { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 0.82rem; margin: 20px 0 14px; }
 .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
-.demo-btn { border-style: dashed; }
 .star-input button.half { background: linear-gradient(90deg, var(--amber) 50%, #dbe3ec 50%); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .total-big { display: inline-flex; align-items: baseline; gap: 4px; white-space: nowrap; }
 .total-big .stars { margin-left: 4px; }
@@ -535,13 +528,6 @@ input[type="range"] { padding: 0; border: none; height: 6px; accent-color: var(-
 .signin-btn { width: 100%; border-radius: 10px; padding: 11px; font-size: 1rem; }
 .login2-or { display: flex; align-items: center; gap: 14px; color: var(--muted); font-size: 0.82rem; margin: 12px 0 10px; }
 .login2-or::before, .login2-or::after { content: ""; flex: 1; height: 1px; background: #d9e1ec; }
-.demo-wide {
-  width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px;
-  font: inherit; font-weight: 600; font-size: 0.94rem; cursor: pointer;
-  background: var(--surface); border: 1px solid #d5deea; border-radius: 10px; padding: 10px; color: var(--text);
-  transition: background 0.15s, border-color 0.15s;
-}
-.demo-wide:hover { background: #f6f9fe; border-color: #b9c9e2; }
 .login2-foot { margin: 12px 0 0; color: var(--muted); font-size: 0.88rem; }
 .login2-foot a { color: var(--accent); text-decoration: none; font-weight: 500; }
 .login2-foot + .login2-foot { margin-top: 4px; }
@@ -558,8 +544,7 @@ input[type="range"] { padding: 0; border: none; height: 6px; accent-color: var(-
   .input-icon { margin-bottom: 8px; }
   .input-icon input { padding-top: 8px; padding-bottom: 8px; }
   .login2-row { margin-bottom: 10px; }
-  .signin-btn, .demo-wide { padding: 9px; }
-  .login2-or { margin: 8px 0 8px; }
+  .signin-btn,   .login2-or { margin: 8px 0 8px; }
   .login2-foot { margin-top: 8px; }
 }
 
@@ -821,13 +806,10 @@ body, .card, .stat, .btn-ghost, input, select, textarea { transition: background
 [data-theme="dark"] .login2-card { background: rgba(19, 28, 51, 0.94); border-color: rgba(255, 255, 255, 0.08); }
 [data-theme="dark"] .login2-tabs { background: var(--grey-soft); }
 [data-theme="dark"] .input-icon > svg, [data-theme="dark"] .eye-btn { color: var(--muted); }
-[data-theme="dark"] .input-icon input, [data-theme="dark"] .demo-wide { border-color: var(--border-strong); }
-[data-theme="dark"] .demo-wide:hover { background: var(--grey-soft); }
-[data-theme="dark"] .forgot-text { background: var(--grey-soft); }
+[data-theme="dark"] .input-icon input, [data-theme="dark"] [data-theme="dark"] [data-theme="dark"] .forgot-text { background: var(--grey-soft); }
 [data-theme="dark"] .login2-or::before, [data-theme="dark"] .login2-or::after { background: var(--border); }
 [data-theme="dark"] .star, [data-theme="dark"] .star-input button { color: #34446a; }
 [data-theme="dark"] .star.full, [data-theme="dark"] .star-input button.on { color: var(--amber); }
-[data-theme="dark"] .demo-banner { background: var(--amber-soft); border-color: #5b4a1d; color: #f3d48a; }
 [data-theme="dark"] .podium-spot.p1 { background: linear-gradient(180deg, var(--amber-soft), var(--surface) 70%); }
 [data-theme="dark"] .badge.closed { color: #f3d48a; }
 [data-theme="dark"] .event-item.active { border-color: var(--border-strong); }
@@ -867,3 +849,5 @@ body, .card, .stat, .btn-ghost, input, select, textarea { transition: background
 @media (max-width: 960px) {
   .nav .nav-inner, .nav.scrolled .nav-inner { height: 64px; padding: 0 20px; }
 }
+
+.bw-empty { margin: 0; padding: 26px 8px; text-align: center; color: var(--muted); font-size: 0.92rem; }

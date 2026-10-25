@@ -13,7 +13,7 @@
     try { if (localStorage.getItem('theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch (e) {}
   </script>
   <link rel="icon" type="image/png" href="img/favicon.png">
-  <link rel="stylesheet" href="css/style.css?v=15">
+  <link rel="stylesheet" href="css/style.css?v=16">
 </head>
 <body class="landing">
 
@@ -64,16 +64,15 @@
         <div class="section-head" style="text-align:left;margin:0 0 18px">
           <div class="kicker">Happening now</div>
           <h2>A real leaderboard, updating live</h2>
-          <p>This board is connected to the live demo event. Every time a judge submits a rating, MongoDB recalculates the ranking and pushes it here instantly. No refresh needed.</p>
+          <p>This board follows a live event. Every time a judge submits a rating, MongoDB recalculates the ranking and pushes it here instantly. No refresh needed.</p>
         </div>
         <div class="latest"><span class="pulse"></span><span id="chip-text">Waiting for the next score...</span></div>
         <div class="hero-ctas" style="margin-top:22px">
           <a class="btn btn-primary" href="leaderboard.html">Open full leaderboard</a>
-          <a class="btn btn-ghost" href="login.html?role=judge&amp;demo=1">Rate a team yourself</a>
         </div>
       </div>
 
-      <!-- Filled by landing.js: real live data if an event is live, otherwise a demo -->
+      <!-- Filled by landing.js with real data when an event is live -->
       <div class="board-widget static reveal" aria-live="polite">
         <div class="bw-head">
           <span class="bw-title" id="bw-title">Live leaderboard</span>
@@ -152,7 +151,7 @@
           </ul>
           <div class="hero-ctas">
             <a class="btn btn-primary" href="login.html?role=admin">Log in as Admin</a>
-            <a class="btn btn-ghost" href="login.html?role=admin&amp;demo=1">Try the demo Admin</a>
+            <a class="btn btn-ghost" href="login.html?role=admin&amp;register=1">Create an account</a>
           </div>
         </div>
       </div>
@@ -171,7 +170,6 @@
           </ul>
           <div class="hero-ctas">
             <a class="btn btn-primary" href="login.html?role=judge">Log in as Judge</a>
-            <a class="btn btn-ghost" href="login.html?role=judge&amp;demo=1">Try the demo Judge</a>
           </div>
         </div>
       </div>
@@ -181,7 +179,7 @@
         <div>
           <span class="role-tag">Team</span>
           <h3>Know where you stand, then learn how to improve</h3>
-          <p>Teams get their own login to follow their rank live and read their feedback after the event.</p>
+          <p>Teams register once, accept the events they are invited to, share their GitHub repo and slides, follow their rank live and read their feedback after the event.</p>
           <ul class="checks">
             <li>Live rank, average score and star rating, updated as judges submit</li>
             <li>Average mark for every rubric criterion</li>
@@ -189,7 +187,7 @@
           </ul>
           <div class="hero-ctas">
             <a class="btn btn-primary" href="login.html?role=team">Log in as Team</a>
-            <a class="btn btn-ghost" href="login.html?role=team&amp;demo=1">Try the demo Team</a>
+            <a class="btn btn-ghost" href="login.html?role=team&amp;register=1">Register your team</a>
           </div>
         </div>
       </div>
@@ -209,7 +207,7 @@
           <li>A short summary of what the judges thought</li>
           <li>Clear strengths and concrete improvements</li>
           <li>An overall sentiment score from negative to positive</li>
-          <li>A backup model and an offline fallback, so it never breaks a demo</li>
+          <li>A backup model and an offline fallback, so feedback never fails to appear</li>
         </ul>
       </div>
       <div class="ai-photo reveal">
@@ -246,7 +244,7 @@
           <button class="hgrid-cell" type="button" data-title="Live in every browser" data-text="Each new ranking travels over Server-Sent Events to every open leaderboard, team page and the landing page."><span>( server-sent events )</span></button>
           <button class="hgrid-cell" type="button" data-title="Proven fast" data-text="explain(&quot;executionStats&quot;) shows the indexes turning a full collection scan (COLLSCAN) into an index scan (IXSCAN)."><span>( explain() )</span></button>
           <button class="hgrid-cell" type="button" data-title="Marks per criterion" data-text="The team page turns each free-form criteria object into key/value pairs, then averages every criterion with $group."><span>( $objectToArray )</span></button>
-          <button class="hgrid-cell" type="button" data-title="One demo event" data-text="A partial unique index on { demo: true } guarantees there is only ever one shared demo event."><span>( partial index )</span></button>
+          <button class="hgrid-cell" type="button" data-title="No duplicate teams" data-text="Partial unique indexes allow each team account in an event only once, and only one open invitation per team per event."><span>( partial index )</span></button>
         </div>
         </div>
       </div>
@@ -274,7 +272,7 @@
     </div>
   </section>
 
-  <script src="js/common.js?v=15"></script>
-  <script src="js/landing.js?v=15"></script>
+  <script src="js/common.js?v=16"></script>
+  <script src="js/landing.js?v=16"></script>
 </body>
 </html>

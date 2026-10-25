@@ -37,7 +37,6 @@ async function loadDashboard() {
   $('event-status').replaceChildren(el('span', event.status, `pill ${event.status}`));
   $('leaderboard-link').href = `leaderboard.html?event=${event._id}`;
   $('not-live').classList.toggle('hidden', event.status === 'live');
-  $('demo-banner').classList.toggle('hidden', !event.demo);
 
   $('stat-teams').textContent = teams.length;
   $('stat-done').textContent = myScores.length;
@@ -129,6 +128,25 @@ function buildTeamCard(event, team, existing) {
   const head = el('div', null, 'section-head');
   head.append(el('h3', team.name), el('span', existing ? 'scored' : 'not scored', `pill ${existing ? 'live' : 'draft'}`));
   card.append(head, el('div', team.members.join(', ') || 'No members listed', 'members'));
+
+  // What the team shared: its GitHub repo and slides.
+  const project = el('div', null, 'project-links');
+  if (team.githubUrl) {
+    const repo = el('a', 'GitHub repo ↗', 'secondary');
+    repo.href = team.githubUrl;
+    repo.target = '_blank';
+    repo.rel = 'noopener';
+    project.append(repo);
+  }
+  if (team.slides) {
+    const slides = el('button', `Slides: ${team.slides.filename}`, 'secondary');
+    slides.type = 'button';
+    slides.title = fileSize(team.slides.size);
+    slides.addEventListener('click', () => safely(() => downloadFile(`/api/judge/teams/${team._id}/slides`, 'judge')));
+    project.append(slides);
+  }
+  if (!team.githubUrl && !team.slides) project.append(el('span', 'This team has not shared a repo or slides yet.', 'small muted'));
+  card.append(project);
 
   const form = el('form');
   const inputs = {};

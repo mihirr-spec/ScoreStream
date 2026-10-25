@@ -42,8 +42,6 @@ const validators = {
         // NOTE: "weights must sum to 1" cannot be expressed in $jsonSchema,
         // so the API checks that rule in Node (Phase 2).
         createdAt: { bsonType: 'date' },
-        // Optional: true only for the shared demo event (see services/demo.js).
-        demo: { bsonType: 'bool' },
         // Optional: the registered admin who created the event (reference to admins._id).
         // Events made by the .env admin have no owner.
         ownerId: { bsonType: 'objectId' },
@@ -95,6 +93,32 @@ const validators = {
         code: { bsonType: 'string', pattern: '^TM[A-Z0-9]{6}$' },
         passwordHash: { bsonType: 'string', pattern: '^[a-f0-9]{32}:[a-f0-9]{128}$' },
         createdAt: { bsonType: 'date' },
+      },
+    },
+  },
+
+  // A team's repo link and slides for one event. The slides FILE lives in GridFS
+  // (slides.files + slides.chunks); slides.fileId points at it.
+  submissions: {
+    $jsonSchema: {
+      bsonType: 'object',
+      required: ['eventId', 'teamId', 'updatedAt'],
+      properties: {
+        eventId: { bsonType: 'objectId' },
+        teamId: { bsonType: 'objectId' }, // reference to teams._id
+        githubUrl: { bsonType: 'string', pattern: '^https://(www\\.)?github\\.com/' },
+        slides: {
+          bsonType: 'object',
+          required: ['fileId', 'filename', 'size', 'contentType', 'uploadedAt'],
+          properties: {
+            fileId: { bsonType: 'objectId' },
+            filename: { bsonType: 'string' },
+            size: { bsonType: 'number', minimum: 1, maximum: 20971520 },
+            contentType: { bsonType: 'string' },
+            uploadedAt: { bsonType: 'date' },
+          },
+        },
+        updatedAt: { bsonType: 'date' },
       },
     },
   },
@@ -252,6 +276,11 @@ const indexes = {
     // The team dashboard's "pending invitations" query.
     { key: { accountId: 1, status: 1 }, options: { name: 'accountId_1_status_1' } },
   ],
+  submissions: [
+    // One submission per team per event; also how the judge page finds it ($lookup on teamId).
+    { key: { eventId: 1, teamId: 1 }, options: { unique: true, name: 'unique_event_team' } },
+    { key: { teamId: 1 }, options: { name: 'teamId_1' } },
+  ],
   admins: [
     // UNIQUE: no two organisers can register the same username (in any letter case).
     { key: { usernameLower: 1 }, options: { unique: true, name: 'unique_usernameLower' } },
@@ -259,9 +288,6 @@ const indexes = {
   events: [
     // An organiser's event list: find({ ownerId }).sort({ createdAt: -1 }).
     { key: { ownerId: 1, createdAt: -1 }, options: { name: 'ownerId_1_createdAt_-1' } },
-    // PARTIAL unique index: only documents with demo: true are indexed, so at most
-    // ONE demo event can exist, even if two visitors start the demo at the same moment.
-    { key: { demo: 1 }, options: { unique: true, partialFilterExpression: { demo: true }, name: 'unique_demo_event' } },
   ],
 };
 

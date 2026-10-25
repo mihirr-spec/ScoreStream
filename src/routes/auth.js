@@ -1,13 +1,11 @@
 // Login routes: admins and teams register and log in with a password (teams use their
-// permanent team code as the "username"), judges with their name + access code,
-// and anyone can open a one-click demo account.
+// permanent team code as the "username"), judges with their name + access code.
 
 const crypto = require('crypto');
 const express = require('express');
 const config = require('../config');
 const { getDb } = require('../db');
 const { signToken, sha256, hashPassword, checkPassword, generateTeamCode } = require('../middleware/auth');
-const { ensureDemoEvent, ensureTeamAccount } = require('../services/demo');
 const { httpError, isNonEmptyString, isValidUsername, cleanMembers } = require('../middleware/validate');
 
 const router = express.Router();
@@ -171,47 +169,6 @@ router.post('/auth/team-login', async (req, res) => {
   }
   const token = signToken({ role: 'team', accountId: account._id.toString() });
   res.json({ token, team: { _id: account._id, name: account.name, code: account.code } });
-});
-
-// POST /api/auth/demo-login  { role: 'admin' | 'judge' | 'team' }
-// One-click demo accounts. No password needed, because every demo account is
-// limited to the shared demo event (created in MongoDB on first use).
-router.post('/auth/demo-login', async (req, res) => {
-  const { role } = req.body || {};
-  if (!['admin', 'judge', 'team'].includes(role)) {
-    throw httpError(400, 'role must be admin, judge or team');
-  }
-
-  const db = getDb();
-  const event = await ensureDemoEvent();
-  const eventId = event._id.toString();
-
-  if (role === 'admin') {
-    // demoEventId locks this admin token to the demo event (see requireAdmin).
-    return res.json({ token: signToken({ role: 'admin', demoEventId: eventId, username: 'Demo admin' }), demo: true, event: { _id: event._id, name: event.name } });
-  }
-
-  if (role === 'judge') {
-    const judge = await db.collection('judges').findOne({ eventId: event._id, name: 'Demo Judge' });
-    if (!judge) throw httpError(404, 'The demo judge was removed. Ask the admin to reset the demo.');
-    return res.json({
-      token: signToken({ role: 'judge', judgeId: judge._id.toString(), eventId }),
-      demo: true,
-      judge: { name: judge.name },
-      event: { _id: event._id, name: event.name },
-    });
-  }
-
-  // role === 'team': the account of the first demo team alphabetically (Team Nova).
-  const team = await db.collection('teams').find({ eventId: event._id }).sort({ name: 1 }).limit(1).next();
-  if (!team) throw httpError(404, 'The demo teams were removed. Ask the admin to reset the demo.');
-  const accountId = await ensureTeamAccount(team);
-  return res.json({
-    token: signToken({ role: 'team', accountId: accountId.toString(), demo: true }),
-    demo: true,
-    team: { name: team.name },
-    event: { _id: event._id, name: event.name },
-  });
 });
 
 module.exports = router;

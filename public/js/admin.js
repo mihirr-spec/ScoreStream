@@ -9,9 +9,7 @@
 
 requireLogin('admin');
 
-// A demo admin token is limited to the demo event (the server enforces this).
-const isDemo = Boolean(tokenPayload('admin').demoEventId);
-const adminName = isDemo ? 'Demo admin' : tokenPayload('admin').username || 'Admin';
+const adminName = tokenPayload('admin').username || 'Admin';
 setupUserBar('admin', adminName);
 $('avatar').textContent = initials(adminName);
 
@@ -185,7 +183,6 @@ async function route() {
   $('main-heading').classList.toggle('hidden', inEvent);
   $('event-heading').classList.toggle('hidden', !inEvent);
   $('event-nav').classList.toggle('hidden', !selectedEvent);
-  $('create-event').classList.toggle('hidden', isDemo);
 
   // Sidebar + tabs: which page is active.
   for (const link of document.querySelectorAll('.nav-item[data-nav]')) {
@@ -424,7 +421,6 @@ async function selectEvent(eventId) {
   $('end-text').textContent = closed
     ? 'This event has ended: scoring is closed and every judge code has expired. Setting it live again needs new judge codes (Judges page, "New code").'
     : 'Closes scoring, publishes the final ranking, writes AI feedback for every team and expires every judge code.';
-  $('delete-card').classList.toggle('hidden', isDemo);
   $('controls-text').textContent = {
     draft: 'Draft: judges cannot score yet. Go live when your teams and judges are ready.',
     live: 'Live: judges are scoring now. Use "End Event" below when judging is over.',
@@ -524,6 +520,21 @@ async function loadTeams() {
     const sub = el('span', null);
     sub.append(team.members.join(', ') || 'No members listed');
     if (team.code) sub.append('  ·  ', el('span', team.code, 'code-chip'));
+    // What the team shared for judging.
+    if (team.githubUrl) {
+      const repo = el('a', 'Repo ↗', 'tiny-button');
+      repo.href = team.githubUrl;
+      repo.target = '_blank';
+      repo.rel = 'noopener';
+      sub.append('  ·  ', repo);
+    }
+    if (team.slides) {
+      const slides = el('button', 'Slides', 'tiny-button');
+      slides.type = 'button';
+      slides.title = team.slides.filename;
+      slides.addEventListener('click', () => safely(() => downloadFile(`/api/teams/${team._id}/slides`, 'admin')));
+      sub.append('  ·  ', slides);
+    }
     list.append(
       personRow(
         team.name,
@@ -901,10 +912,7 @@ $('generate-feedback').addEventListener('click', () =>
 );
 
 // ---------- Start ----------
-if (isDemo) $('demo-banner').classList.remove('hidden');
 safely(async () => {
   await loadEvents();
-  // The demo admin goes straight into the demo event.
-  if (isDemo && !parseRoute().eventId) location.replace(eventUrl(tokenPayload('admin').demoEventId));
   await route();
 });

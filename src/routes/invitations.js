@@ -18,7 +18,6 @@ const MAX_INVITES = 500;
 
 // The admin's name as the team will see it.
 function adminName(req) {
-  if (req.demoEventId) return 'Demo admin';
   return req.adminUsername || config.adminUsername;
 }
 

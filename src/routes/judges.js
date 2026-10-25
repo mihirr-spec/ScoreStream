@@ -106,13 +106,30 @@ router.get('/judge/me', requireJudge, async (req, res) => {
   const event = await db.collection('events').findOne({ _id: eventId });
   if (!event) throw httpError(404, 'Event not found');
 
-  // projection hides each team's secret code hash from the judge's browser.
-  const teams = await db.collection('teams').find({ eventId }, { projection: { codeHash: 0 } }).sort({ name: 1 }).toArray();
+  // Each team with its submission (repo link + slides info). The code hash and
+  // account id are left out of what the judge's browser receives.
+  const teams = await db
+    .collection('teams')
+    .aggregate([
+      { $match: { eventId } },
+      { $sort: { name: 1 } },
+      { $project: { codeHash: 0, accountId: 0 } },
+      // The team's submission (repo link + slides info), if it has one.
+      { $lookup: { from: 'submissions', localField: '_id', foreignField: 'teamId', as: 'submission' } },
+      {
+        $set: {
+          githubUrl: { $first: '$submission.githubUrl' },
+          slides: { $first: '$submission.slides' },
+        },
+      },
+      { $project: { submission: 0, 'slides.fileId': 0, 'slides.contentType': 0 } },
+    ])
+    .toArray();
   const myScores = await db.collection('scores').find({ eventId, judgeId: req.judge._id }).toArray();
 
   res.json({
     judge: { _id: req.judge._id, name: req.judge.name },
-    event: { _id: event._id, name: event.name, status: event.status, rubric: event.rubric, demo: event.demo === true },
+    event: { _id: event._id, name: event.name, status: event.status, rubric: event.rubric },
     teams,
     myScores,
   });

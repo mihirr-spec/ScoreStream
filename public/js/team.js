@@ -62,7 +62,6 @@ async function loadMe() {
 
   setupUserBar('team', team.name);
   setupShell(team.name);
-  $('demo-banner').classList.toggle('hidden', !team.demo);
   $('team-name').textContent = team.name;
   $('team-members').textContent = team.members.length ? `Members: ${team.members.join(', ')}` : 'No members listed';
   $('team-code').textContent = team.code;
@@ -283,6 +282,71 @@ function showFeedback(event, feedback) {
   box.append(cols);
 }
 
+// ---------- Submission: GitHub repo + slides ----------
+function showSubmission(event, submission) {
+  const locked = event.status === 'closed';
+  $('submission-note').textContent = locked
+    ? 'The event has ended, so your submission is locked. Judges can still open it.'
+    : 'Share your GitHub repo and slides with the judges. You can change them until the event ends.';
+
+  $('repo-url').value = submission.githubUrl;
+  $('repo-url').disabled = locked;
+  $('repo-save').disabled = locked;
+  const current = $('repo-current');
+  current.replaceChildren();
+  if (submission.githubUrl) {
+    const link = el('a', submission.githubUrl);
+    link.href = submission.githubUrl;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    current.append('Judges see: ', link);
+  } else current.append('No repository shared yet.');
+
+  const slides = submission.slides;
+  $('slides-current').textContent = slides
+    ? `${slides.filename}  ·  ${fileSize(slides.size)}  ·  uploaded ${new Date(slides.uploadedAt).toLocaleString()}`
+    : 'No slides uploaded yet.';
+  $('slides-upload-label').textContent = slides ? 'Replace slides' : 'Upload slides';
+  $('slides-upload-label').classList.toggle('hidden', locked);
+  $('slides-open').classList.toggle('hidden', !slides);
+  $('slides-remove').classList.toggle('hidden', !slides || locked);
+}
+
+$('repo-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  safely(async () => {
+    await api('PUT', `/api/team/events/${openEventId}/submission`, { githubUrl: $('repo-url').value }, 'team');
+    toast($('repo-url').value.trim() ? 'Repository link saved' : 'Repository link removed');
+    await loadEvent(openEventId);
+  });
+});
+
+$('slides-file').addEventListener('change', (e) =>
+  safely(async () => {
+    const file = e.target.files[0];
+    e.target.value = ''; // so choosing the same file again still fires "change"
+    if (!file) return;
+    if (file.size > 20 * 1024 * 1024) throw new Error('Slides must be 20 MB or smaller');
+    const label = $('slides-upload-label');
+    label.textContent = 'Uploading...';
+    try {
+      await uploadFile(`/api/team/events/${openEventId}/slides?name=${encodeURIComponent(file.name)}`, file, 'team');
+      toast('Slides uploaded - judges can open them now');
+    } finally {
+      await loadEvent(openEventId);
+    }
+  })
+);
+
+$('slides-open').addEventListener('click', () => safely(() => downloadFile(`/api/team/events/${openEventId}/slides`, 'team')));
+$('slides-remove').addEventListener('click', () =>
+  safely(async () => {
+    await api('DELETE', `/api/team/events/${openEventId}/slides`, undefined, 'team');
+    toast('Slides removed');
+    await loadEvent(openEventId);
+  })
+);
+
 function stopLive() {
   if (liveSource) liveSource.close();
   liveSource = null;
@@ -302,6 +366,7 @@ async function loadEvent(eventId) {
   showBreakdown(data.breakdown);
   showJudgeScores(data.event.rubric, data.judgeScores);
   showFeedback(data.event, data.feedback);
+  showSubmission(data.event, data.submission);
 
   // Listen to the event's public leaderboard stream and pick out our own row.
   if (openEventId !== eventId) {

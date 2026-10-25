@@ -41,7 +41,6 @@ Then:
 
 ```bash
 npm run setup-db   # collections + $jsonSchema validators + indexes (safe to re-run)
-npm run seed       # demo data (2 events, teams, judges, scores)
 npm run dev        # start the server (auto-restarts when you edit files)
 ```
 
@@ -51,7 +50,7 @@ Open http://localhost:3000 for the landing page, then **Log in** (one screen, th
 |---|---|---|
 | Admin | **Create an account** on the Administrator tab, or use `ADMIN_USERNAME` + `ADMIN_PASSWORD` from `.env` (sees every event) | Dashboard and Events list. Inside each event: add judges (a unique code is generated), invite teams by their team code, rankings, AI feedback, and End Event. Registered admins only see their own events |
 | Judge | **Name + code** from the organiser, e.g. `Judge One` + `JUDGE001` | Rate the event's teams one at a time (stars + feedback), then "Submit & next". Codes **expire when the admin ends the event** |
-| Team | **Register** on the Student tab (team name, members, password) to get a permanent team code. Sign in with **team code + password**. Seeded teams: `TM000001` to `TM000005` and `TM000101` to `TM000103`, password `team1234` | Accept or decline invitations, then per event: live rank, average, every judge's marks and comments, and AI feedback once the event ends |
+| Team | **Register** on the Student tab (team name, members, password) to get a permanent team code. Sign in with **team code + password**. | Accept or decline invitations, then per event: share a GitHub repo and slides, live rank, average, every judge's marks and comments, and AI feedback once the event ends |
 
 **How a team joins an event:** the admin enters the team's code, which creates a *pending invitation*. The team
 sees a pop-up on its dashboard ("*admin* wants to add your team to *event*") and accepts or declines. Only
@@ -65,24 +64,21 @@ writes AI feedback for every team: the model merges the judges' short notes (e.g
 **Excel:** "Invite from Excel" reads a `Team code` column and sends one invitation per row. "Export to Excel"
 downloads the event's teams with codes, ranks and averages.
 
-**Demo accounts:** every role also has a **Try the demo** button (no password or code). They all share
-the *ScoreStream Demo Event* (3 teams) stored in MongoDB. The demo admin is locked to that event by the
-server, so visitors can never see, change or delete real events.
+**Submissions:** in each event a team can share its **GitHub repo** link and upload its **slides**
+(PDF, PPT or PPTX, up to 20 MB) until the event ends. Judges see both on the team's scoring card, and the
+admin sees them in the event's team list. Slide files are stored in MongoDB with **GridFS**
+(`slides.files` + `slides.chunks`), so no separate file server is needed and files survive redeploys.
 
 The public leaderboard is at http://localhost:3000/leaderboard.html.
-
-**Live demo:** open the leaderboard in one window. In another, click **Try the demo Judge** and rate
-a team with the stars. The leaderboard re-ranks on its own, without a refresh.
 
 ## 2. Scripts
 
 | Command | What it does |
 |---|---|
 | `npm run setup-db` | Creates/updates all collections, validators and indexes |
-| `npm run seed` | Deletes and recreates the two demo events |
 | `npm run dev` / `npm start` | Runs the server (with / without auto-restart) |
 | `npm run explain` | Prints COLLSCAN vs IXSCAN for the main queries |
-| `npm test` | Runs the API tests: the 6 required cases plus team login, demo limits, judge name + code login, admin accounts and Excel import (separate `<DB_NAME>_test` database) |
+| `npm test` | Runs the API tests: the 6 required cases plus team accounts, invitations and duplicates, submissions, expiring judge codes and admin accounts (separate `<DB_NAME>_test` database) |
 
 ### explain() screenshots (COLLSCAN vs IXSCAN)
 
@@ -113,12 +109,11 @@ ScoreStream/
 │       ├── leaderboard.js      Aggregation pipeline ending in $merge
 │       ├── changeStream.js     Watches scores -> recompute -> SSE push
 │       ├── sse.js              Connected browsers per event
-│       ├── demo.js             Creates the shared demo event behind the demo accounts
 │       ├── feedback.js         Writes AI feedback for every team of a closed event
 │       └── ai.js               OpenRouter call + fallback model + mock (only AI-specific file)
 ├── public/                     Frontend (plain HTML, CSS, JS)
 │   ├── index.html              Landing page
-│   ├── login.html              One login screen for Admin / Judge / Team (+ demo buttons)
+│   ├── login.html              One login screen for Admin / Judge / Team (+ team and admin sign-up)
 │   ├── admin.html  judge.html  team.html  leaderboard.html
 │   ├── css/style.css           Shared design system
 │   ├── img/                    Hero image and free-licensed Pexels photos
@@ -126,7 +121,6 @@ ScoreStream/
 │       js/landing.js  login.js  admin.js  judge.js  team.js  leaderboard.js
 ├── scripts/                    One-off database scripts
 │   ├── setup-db.js             Collections, $jsonSchema validators, indexes
-│   ├── seed.js                 Demo data
 │   └── explain.js              COLLSCAN vs IXSCAN report
 ├── tests/
 │   └── api.test.js             The 6 required API tests (node --test)
@@ -162,7 +156,9 @@ For example, marks 8, 7, 9 with weights 0.3, 0.4, 0.3 → **7.9**. `avgScore` is
   - Extras:
     - `judges` and `teams` UNIQUE `{codeHash}` speed up code logins and guarantee unique codes. The teams one is **sparse**, so teams without a code do not clash.
     - `feedback` UNIQUE `{eventId, teamId}` keeps one feedback document per team (used by an upsert).
-    - `events` **partial** unique index on `{demo: 1}` (only where `demo: true`) guarantees a single demo event, even if two visitors start the demo at the same moment.
+    - `teams` **partial** unique `{eventId, accountId}` stops the same team account joining an event twice.
+    - `invitations` **partial** unique `{eventId, accountId}` where `status: 'pending'` allows one open invitation per team per event.
+    - `teamAccounts` UNIQUE `{code}`, `admins` UNIQUE `{usernameLower}`, `submissions` UNIQUE `{eventId, teamId}`.
 - **Per-criterion averages** for the team page use `$objectToArray` -> `$unwind` -> `$group` on the free-form `criteria` object.
 - **Aggregation pipeline** (`services/leaderboard.js`): `$match` → `$group` (`$avg`, `$sum`) → `$set` (`$round`) → `$lookup` teams → `$unwind` → `$setWindowFields` with `$rank` → `$project` → `$merge` into `leaderboard`.
 - **Change Stream** (`services/changeStream.js`): `scores.watch()` filtered to insert, update, replace and delete, with `fullDocument: 'updateLookup'`.
@@ -176,19 +172,25 @@ For example, marks 8, 7, 9 with weights 0.3, 0.4, 0.3 → **7.9**. `avgScore` is
 
 | Method | Path | Who |
 |---|---|---|
-| POST | `/api/auth/admin-login` `{username, password}` | public |
-| POST | `/api/auth/judge-login` `{code}` | public |
-| POST | `/api/auth/team-login` `{code}` | public |
-| POST | `/api/auth/demo-login` `{role}` (admin, judge or team demo account) | public |
+| POST | `/api/auth/admin-register`, `/api/auth/admin-login` `{username, password}` | public |
+| POST | `/api/auth/judge-login` `{name, code}` (refused once the event has ended) | public |
+| POST | `/api/auth/team-register` `{name, members, password}`, `/api/auth/team-login` `{code, password}` | public |
 | GET, POST | `/api/events` | admin |
-| GET, PATCH, DELETE | `/api/events/:id` (PATCH: status and/or rubric) | admin |
-| GET, POST | `/api/events/:eventId/teams` | admin |
-| PATCH, DELETE | `/api/teams/:id` | admin |
-| GET, POST | `/api/events/:eventId/judges` (POST returns the code once) | admin |
-| DELETE | `/api/judges/:id` | admin |
-| POST | `/api/teams/:id/reset-code`, `/api/judges/:id/reset-code` (new code, shown once) | admin |
-| GET | `/api/team/me` (the team's rank, per-criterion averages, feedback once closed) | team |
-| GET | `/api/judge/me` (the judge's event, rubric, teams and own scores) | judge |
+| GET, PATCH, DELETE | `/api/events/:id` (PATCH: status and/or rubric; `closed` expires judge codes) | admin |
+| GET | `/api/events/:eventId/teams` (with team code, repo link and slides info) | admin |
+| DELETE | `/api/teams/:id` (removes the team from the event) | admin |
+| GET, POST | `/api/events/:eventId/invitations` `{code}` or `{codes: [...]}` | admin |
+| DELETE | `/api/invitations/:id` (withdraw a pending invitation) | admin |
+| GET, POST | `/api/events/:eventId/judges` `{name}` (POST returns the generated code once) | admin |
+| DELETE | `/api/judges/:id`; POST `/api/judges/:id/reset-code` (new code, shown once) | admin |
+| GET | `/api/teams/:id/slides` (download) | admin |
+| GET | `/api/team/me` (account, events, pending invitations) | team |
+| POST | `/api/team/invitations/:id` `{accept}` | team |
+| GET | `/api/team/events/:eventId` (rank, per-criterion averages, judges' scores, submission, feedback once closed) | team |
+| PUT | `/api/team/events/:eventId/submission` `{githubUrl}` | team |
+| PUT, GET, DELETE | `/api/team/events/:eventId/slides?name=deck.pptx` (PUT body = the raw file) | team |
+| GET | `/api/judge/me` (the judge's event, rubric, teams with submissions, own scores) | judge |
+| GET | `/api/judge/teams/:teamId/slides` (download) | judge |
 | POST | `/api/scores` `{teamId, criteria, comment}` | judge |
 | PUT | `/api/scores/:id` `{criteria, comment}` | judge (own scores only) |
 | GET | `/api/events/:eventId/scores` | admin |

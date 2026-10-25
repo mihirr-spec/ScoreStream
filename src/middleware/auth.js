@@ -40,10 +40,8 @@ function requireAdmin(req, res, next) {
   if (payload.role !== 'admin') {
     throw httpError(403, 'Admin access only');
   }
-  // A demo admin token carries demoEventId: it may only touch that one event.
   // A registered admin's token carries adminId: they may only touch events they own.
-  // The .env admin has neither -> full access to every event.
-  req.demoEventId = payload.demoEventId || null;
+  // The .env admin has no adminId -> full access to every event.
   req.adminId = payload.adminId ? parseId(payload.adminId, 'admin id') : null;
   req.adminUsername = payload.username || null;
   next();
@@ -52,24 +50,11 @@ function requireAdmin(req, res, next) {
 // Called by admin routes once they know which event a request is about.
 // If the event does not exist we let the route answer 404 itself.
 async function assertEventAccess(req, eventId) {
-  if (req.demoEventId) {
-    if (req.demoEventId !== eventId.toString()) {
-      throw httpError(403, 'The demo admin can only manage the demo event');
-    }
-    return;
-  }
   if (req.adminId) {
     const event = await getDb().collection('events').findOne({ _id: eventId }, { projection: { ownerId: 1 } });
     if (event && !(event.ownerId && event.ownerId.equals(req.adminId))) {
       throw httpError(403, 'You can only manage your own events');
     }
-  }
-}
-
-// For actions a demo admin must never do (create or delete whole events).
-function denyDemo(req, action) {
-  if (req.demoEventId) {
-    throw httpError(403, `The demo admin cannot ${action}`);
   }
 }
 
@@ -149,7 +134,6 @@ module.exports = {
   signToken,
   requireAdmin,
   assertEventAccess,
-  denyDemo,
   requireJudge,
   requireTeam,
   generateCode,

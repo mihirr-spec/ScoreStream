@@ -93,6 +93,48 @@ async function api(method, path, body, role) {
   return data;
 }
 
+// Uploads a file as the raw request body (used for team slides).
+async function uploadFile(path, file, role) {
+  const res = await fetch(path, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${auth.get(role)}`, 'Content-Type': 'application/octet-stream' },
+    body: file,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401) logout(role);
+  if (!res.ok) throw new Error(data.error || 'Upload failed');
+  return data;
+}
+
+// Downloads a protected file (it needs the login token, so a plain link won't do).
+// PDFs open in a new tab; other files (e.g. .pptx) are saved.
+async function downloadFile(path, role) {
+  const res = await fetch(path, { headers: { Authorization: `Bearer ${auth.get(role)}` } });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Download failed');
+  }
+  const blob = await res.blob();
+  const name = (res.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/)?.[1] || 'slides';
+  const url = URL.createObjectURL(blob);
+  if (blob.type === 'application/pdf') {
+    window.open(url, '_blank', 'noopener');
+  } else {
+    const link = el('a');
+    link.href = url;
+    link.download = name;
+    document.body.append(link);
+    link.click();
+    link.remove();
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+// "2400000" -> "2.3 MB"
+function fileSize(bytes) {
+  return bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
 // Runs an async action and shows any error as a red toast.
 async function safely(action) {
   try {
@@ -170,7 +212,7 @@ function badge(text, kind) {
 }
 
 // Reads the data inside a login token (a JWT is three base64 parts: header.payload.signature).
-// Only used to show things like "demo mode" - the SERVER still checks every request.
+// Only used to show things like the username - the SERVER still checks every request.
 function tokenPayload(role) {
   const token = auth.get(role);
   if (!token) return {};

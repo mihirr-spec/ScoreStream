@@ -1,6 +1,6 @@
 // Landing page: scroll animations + the small live leaderboard in the hero.
 // If an event is live, the widget shows REAL data pushed over SSE.
-// If not, it plays a short demo so the page still shows the idea.
+// If not, it says so.
 
 // ---------- Fade sections in as they scroll into view ----------
 const observer = new IntersectionObserver(
@@ -49,8 +49,7 @@ function renderWidget(rows) {
 // Real data: first live event -> its leaderboard -> keep listening over SSE.
 async function startLiveWidget() {
   const events = await api('GET', '/api/leaderboard/events');
-  // Prefer the live demo event (anyone can rate it), otherwise any live event.
-  const live = events.find((e) => e.status === 'live' && e.demo) || events.find((e) => e.status === 'live');
+  const live = events.find((e) => e.status === 'live');
   if (!live) return false;
 
   const data = await api('GET', `/api/events/${live._id}/leaderboard`);
@@ -65,36 +64,18 @@ async function startLiveWidget() {
   return true;
 }
 
-// Demo data: random small score changes every few seconds, re-ranked locally.
-function startDemoWidget() {
-  const teams = [
-    { teamName: 'Query Queens', avgScore: 8.7 },
-    { teamName: 'Byte Bandits', avgScore: 7.9 },
-    { teamName: 'The Indexers', avgScore: 7.1 },
-    { teamName: 'Null Pointers', avgScore: 6.6 },
-    { teamName: 'Stack Smashers', avgScore: 5.9 },
-  ];
-
-  function rankAndRender() {
-    teams.sort((a, b) => b.avgScore - a.avgScore);
-    teams.forEach((t, i) => (t.rank = i + 1));
-    renderWidget(teams.map((t) => ({ ...t })));
-  }
-
-  rankAndRender();
-  setInterval(() => {
-    const team = teams[Math.floor(Math.random() * teams.length)];
-    const change = (Math.random() * 1.6 - 0.6).toFixed(2);
-    team.avgScore = Math.min(9.8, Math.max(4, Math.round((team.avgScore + Number(change)) * 100) / 100));
-    rankAndRender();
-  }, 2800);
+// No live event: an empty board with a short explanation.
+function showNoLiveEvent() {
+  $('bw-rows').replaceChildren(el('p', 'No event is live right now. Rankings appear here as soon as one goes live.', 'bw-empty'));
+  $('bw-foot').textContent = 'Waiting for a live event';
+  $('chip-text').textContent = 'No live event right now';
 }
 
 startLiveWidget()
   .then((isLive) => {
-    if (!isLive) startDemoWidget();
+    if (!isLive) showNoLiveEvent();
   })
-  .catch(startDemoWidget);
+  .catch(showNoLiveEvent);
 
 // ---------- Highlight grid (ported from VengeanceUI "highlight-grid") ----------
 // One coloured highlight glides behind the hovered cell, changing position,

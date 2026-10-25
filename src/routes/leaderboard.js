@@ -21,7 +21,7 @@ async function findPublicEvent(eventId) {
 router.get('/leaderboard/events', async (req, res) => {
   const events = await getDb()
     .collection('events')
-    .find({ status: { $in: ['live', 'closed'] } }, { projection: { name: 1, status: 1, demo: 1 } })
+    .find({ status: { $in: ['live', 'closed'] } }, { projection: { name: 1, status: 1 } })
     .sort({ createdAt: -1 })
     .toArray();
   res.json(events);

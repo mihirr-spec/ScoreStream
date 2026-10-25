@@ -16,7 +16,6 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "setup-db": "node scripts/setup-db.js",
-    "seed": "node scripts/seed.js",
     "explain": "node scripts/explain.js",
     "test": "node --test tests/api.test.js"
   },

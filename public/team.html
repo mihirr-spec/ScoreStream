@@ -12,7 +12,7 @@
     try { if (localStorage.getItem('theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch (e) {}
   </script>
   <link rel="icon" type="image/png" href="img/favicon.png">
-  <link rel="stylesheet" href="css/app.css?v=15">
+  <link rel="stylesheet" href="css/app.css?v=16">
 </head>
 <body>
   <aside class="sidebar" aria-label="Primary sidebar">
@@ -60,7 +60,6 @@
   </header>
 
   <main class="main">
-    <div id="demo-banner" class="banner hidden">⭐ <strong>Demo team.</strong> Your rank updates live while judges rate. Try the demo judge in another tab and watch it move.</div>
     <div id="welcome-banner" class="banner info hidden">🎉 <strong>Your team is registered.</strong> Share your team code below with event organisers - they use it to invite you, and you accept here.</div>
 
     <!-- ===================== Dashboard ===================== -->
@@ -159,6 +158,36 @@
         </article>
       </section>
 
+      <section class="card section-card" id="submission-card">
+        <div class="section-head">
+          <div>
+            <h2>Your submission</h2>
+            <p class="section-sub" id="submission-note">Share your GitHub repo and slides with the judges. You can change them until the event ends.</p>
+          </div>
+        </div>
+        <div class="detail-grid">
+          <div>
+            <label class="field-label" for="repo-url">GitHub repository</label>
+            <form id="repo-form" class="inline-form">
+              <input id="repo-url" class="text-input" type="url" maxlength="300" placeholder="https://github.com/your-team/your-repo">
+              <button type="submit" class="primary" id="repo-save">Save link</button>
+            </form>
+            <p class="small muted" id="repo-current"></p>
+          </div>
+          <div>
+            <span class="field-label">Slides</span>
+            <div id="slides-current" class="small muted" style="margin-bottom:10px"></div>
+            <div class="action-row">
+              <label class="secondary" for="slides-file" id="slides-upload-label">Upload slides</label>
+              <input type="file" id="slides-file" class="hidden" accept=".pdf,.ppt,.pptx">
+              <button type="button" class="secondary hidden" id="slides-open">Open</button>
+              <button type="button" class="tiny-button danger hidden" id="slides-remove">Remove</button>
+            </div>
+            <p class="small muted" style="margin-top:8px">PDF, PPT or PPTX, up to 20 MB.</p>
+          </div>
+        </div>
+      </section>
+
       <div class="detail-grid">
         <article class="card detail-card">
           <div class="section-head">
@@ -206,7 +235,7 @@
     </div>
   </div>
 
-  <script src="js/common.js?v=15"></script>
-  <script src="js/team.js?v=15"></script>
+  <script src="js/common.js?v=16"></script>
+  <script src="js/team.js?v=16"></script>
 </body>
 </html>

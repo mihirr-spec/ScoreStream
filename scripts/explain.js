@@ -6,7 +6,7 @@
 //   1. npm run explain -- --drop-indexes   (removes scores indexes -> shows COLLSCAN)
 //   2. npm run setup-db                    (puts the indexes back)
 //   3. npm run explain                     (shows IXSCAN)
-// Run "npm run seed" first so there is real data (2 events) - then COLLSCAN reads
+// Create an event with a few scores first so there is real data - then COLLSCAN reads
 // ALL scores while IXSCAN reads only the chosen event's scores.
 
 const { ObjectId } = require('mongodb');

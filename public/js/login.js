@@ -10,7 +10,6 @@ const ROLES = {
     name: { field: 'code', label: 'Team code', placeholder: 'e.g. TM7K4Q2X', autocomplete: 'username' },
     secret: { field: 'password', label: 'Password', placeholder: 'Your team password', isPassword: true },
     next: 'team.html',
-    demoLabel: 'Try the demo Student account',
     forgot: 'Your team code is shown on your team dashboard. There is no password reset yet - register a new team if you lost it.',
     register: {
       endpoint: '/api/auth/team-register',
@@ -27,7 +26,6 @@ const ROLES = {
     name: { field: 'name', label: 'Your name', placeholder: 'Exactly as the organiser added you', autocomplete: 'name' },
     secret: { field: 'code', label: 'Judge access code', placeholder: 'e.g. 4F9A1C2B', isPassword: false },
     next: 'judge.html',
-    demoLabel: 'Try the demo Judge account',
     forgot: 'Your name and code come from the event organiser. Codes expire when the event ends - ask the organiser for a new one.',
   },
   admin: {
@@ -35,7 +33,6 @@ const ROLES = {
     name: { field: 'username', label: 'Username', placeholder: 'Enter your username', autocomplete: 'username' },
     secret: { field: 'password', label: 'Password', placeholder: 'Enter your password', isPassword: true },
     next: 'admin.html',
-    demoLabel: 'Try the demo Administrator account',
     forgot: 'There is no email reset yet. If you are the main admin, your login is ADMIN_USERNAME / ADMIN_PASSWORD in the server\'s .env file.',
     register: {
       endpoint: '/api/auth/admin-register',
@@ -54,8 +51,6 @@ const params = new URLSearchParams(location.search);
 let currentRole = ROLES[params.get('role')] ? params.get('role') : 'team';
 // true = the "register" form of the current role instead of "sign in".
 let registering = params.get('register') === '1';
-// Read ?demo=1 now, because selectRole() rewrites the URL.
-const startDemo = params.get('demo') === '1';
 
 function selectRole(role) {
   currentRole = role;
@@ -99,7 +94,6 @@ function selectRole(role) {
   $('forgot-btn').textContent = isPassword ? 'Forgot password?' : 'Forgot your code?';
   $('forgot-btn').classList.toggle('hidden', registering);
   $('forgot-text').classList.add('hidden');
-  $('demo-label').textContent = r.demoLabel;
 
   // Sign up exists for teams and organisers, not judges (the organiser adds judges).
   $('register-foot').classList.toggle('hidden', !r.register);
@@ -168,20 +162,4 @@ $('login-form').addEventListener('submit', (e) => {
   });
 });
 
-// One-click demo account: the server returns a token limited to the demo event.
-async function demoLogin() {
-  const button = $('demo-btn');
-  button.disabled = true;
-  try {
-    const data = await api('POST', '/api/auth/demo-login', { role: currentRole });
-    finishLogin(data.token);
-  } finally {
-    button.disabled = false;
-  }
-}
-$('demo-btn').addEventListener('click', () => safely(demoLogin));
-
 selectRole(currentRole);
-
-// Links like login.html?role=judge&demo=1 (from the landing page) start the demo straight away.
-if (startDemo) safely(demoLogin);

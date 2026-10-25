@@ -1,7 +1,7 @@
 // API tests using Node's built-in test runner:  npm test
 //
 // They run against a SEPARATE database "<DB_NAME>_test" (dropped at the start and end),
-// so your demo data is never touched. They need the same Atlas cluster as the app
+// so your real data is never touched. They need the same Atlas cluster as the app
 // (a replica set, because test 4 relies on the Change Stream).
 // AI_FORCE_MOCK=1 makes test 6 use the mock AI, so no network call to OpenRouter.
 
@@ -251,30 +251,45 @@ test('extra: a team joins only after accepting, and duplicates are refused', asy
   await assert.rejects(getDb().collection('teams').insertOne(copy), (err) => err.code === 11000);
 });
 
-test('extra: demo accounts are limited to the demo event', async () => {
-  const demoAdmin = (await api('POST', '/api/auth/demo-login', { body: { role: 'admin' } })).body.token;
-  const demoJudge = (await api('POST', '/api/auth/demo-login', { body: { role: 'judge' } })).body.token;
+test('extra: a team shares its repo and slides, and its judges can open them', async () => {
+  const token = teamAAccount.token;
+  const bad = await api('PUT', `/api/team/events/${eventId}/submission`, { token, body: { githubUrl: 'https://example.com/x' } });
+  assert.equal(bad.status, 400);
+  const saved = await api('PUT', `/api/team/events/${eventId}/submission`, { token, body: { githubUrl: 'https://github.com/team-a/project' } });
+  assert.equal(saved.status, 200);
 
-  // The demo judge sees the 3 demo teams and can rate one of them.
-  const me = await api('GET', '/api/judge/me', { token: demoJudge });
-  assert.equal(me.body.teams.length, 3);
-  assert.equal(me.body.event.demo, true);
-  const rated = await api('POST', '/api/scores', {
-    token: demoJudge,
-    body: { teamId: me.body.teams[0]._id, criteria: { innovation: 10, design: 8, execution: 6 }, comment: 'Demo rating' },
-  });
-  assert.equal(rated.status, 201);
+  // Upload: the raw file is the request body; it is stored in GridFS.
+  const bytes = Buffer.from('PK fake pptx bytes '.repeat(500));
+  const upload = (name, body) =>
+    fetch(`${baseUrl}/api/team/events/${eventId}/slides?name=${encodeURIComponent(name)}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/octet-stream' },
+      body,
+    });
+  assert.equal((await upload('notes.txt', bytes)).status, 400);
+  const ok = await upload('Team A deck.pptx', bytes);
+  assert.equal(ok.status, 201);
+  assert.equal((await ok.json()).slides.size, bytes.length);
+  assert.equal(await getDb().collection('slides.files').countDocuments({}), 1);
 
-  const demoTeam = (await api('POST', '/api/auth/demo-login', { body: { role: 'team' } })).body.token;
-  const teamMe = await api('GET', '/api/team/me', { token: demoTeam });
-  assert.equal(teamMe.body.events.length, 1);
+  // Replacing the slides deletes the old file.
+  assert.equal((await upload('Team A deck v2.pptx', bytes)).status, 201);
+  assert.equal(await getDb().collection('slides.files').countDocuments({}), 1);
 
-  // The demo admin only sees the demo event, and cannot touch the real test event.
-  const list = await api('GET', '/api/events', { token: demoAdmin });
-  assert.equal(list.body.length, 1);
-  assert.equal((await api('GET', `/api/events/${eventId}`, { token: demoAdmin })).status, 403);
-  assert.equal((await api('GET', `/api/events/${eventId}/teams`, { token: demoAdmin })).status, 403);
-  assert.equal((await api('DELETE', `/api/events/${list.body[0]._id}`, { token: demoAdmin })).status, 403);
+  // The judge sees the link and file name, and downloads the exact bytes.
+  const me = await api('GET', '/api/judge/me', { token: judgeToken });
+  const teamRow = me.body.teams.find((t) => t._id === teamA);
+  assert.equal(teamRow.githubUrl, 'https://github.com/team-a/project');
+  assert.equal(teamRow.slides.filename, 'Team A deck v2.pptx');
+  const download = await fetch(`${baseUrl}/api/judge/teams/${teamA}/slides`, { headers: { Authorization: `Bearer ${judgeToken}` } });
+  assert.equal(download.status, 200);
+  assert.deepEqual(Buffer.from(await download.arrayBuffer()), bytes);
+
+  // The admin can open it too, and the team's results page shows the submission.
+  const adminDownload = await fetch(`${baseUrl}/api/teams/${teamA}/slides`, { headers: { Authorization: `Bearer ${adminToken}` } });
+  assert.equal(adminDownload.status, 200);
+  const detail = await api('GET', `/api/team/events/${eventId}`, { token });
+  assert.equal(detail.body.submission.slides.filename, 'Team A deck v2.pptx');
 });
 
 test('6. generate AI feedback for a team -> summary + sentiment saved (mock)', async () => {
@@ -304,6 +319,11 @@ test('extra: ending the event expires every judge code', async () => {
   const reset = await api('POST', `/api/judges/${judges[0]._id}/reset-code`, { token: adminToken });
   const login = await api('POST', '/api/auth/judge-login', { body: { name: judges[0].name, code: reset.body.code } });
   assert.equal(login.status, 200);
+});
+
+test('extra: submissions are locked once the event has ended', async () => {
+  const res = await api('PUT', `/api/team/events/${eventId}/submission`, { token: teamAAccount.token, body: { githubUrl: 'https://github.com/team-a/other' } });
+  assert.equal(res.status, 409);
 });
 
 test('extra: judge must give the right name with a chosen code', async () => {

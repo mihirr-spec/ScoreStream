@@ -6,7 +6,7 @@
 // The fallback can use a different provider (e.g. Google Gemini's OpenAI-compatible
 // endpoint) via AI_FALLBACK_BASE_URL + AI_FALLBACK_API_KEY.
 // If there is no API key, or every attempt fails, we return a clearly-labelled
-// MOCK result so the demo also works offline.
+// MOCK result so the app also works offline.
 
 const config = require('../config');
 

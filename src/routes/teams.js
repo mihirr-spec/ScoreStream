@@ -7,6 +7,7 @@ const express = require('express');
 const { getDb } = require('../db');
 const { requireAdmin, assertEventAccess, requireTeam } = require('../middleware/auth');
 const { httpError, parseId } = require('../middleware/validate');
+const { publicSubmission, deleteSubmissions } = require('./submissions');
 
 const router = express.Router();
 
@@ -26,6 +27,15 @@ router.get('/events/:eventId/teams', requireAdmin, async (req, res) => {
       { $lookup: { from: 'teamAccounts', localField: 'accountId', foreignField: '_id', as: 'account' } },
       { $set: { code: { $first: '$account.code' } } },
       { $project: { account: 0, codeHash: 0 } },
+      // The team's submission (repo link + slides info), if it has one.
+      { $lookup: { from: 'submissions', localField: '_id', foreignField: 'teamId', as: 'submission' } },
+      {
+        $set: {
+          githubUrl: { $first: '$submission.githubUrl' },
+          slides: { $first: '$submission.slides' },
+        },
+      },
+      { $project: { submission: 0, 'slides.fileId': 0, 'slides.contentType': 0 } },
     ])
     .toArray();
   res.json(teams);
@@ -45,6 +55,7 @@ router.delete('/teams/:id', requireAdmin, async (req, res) => {
   await db.collection('scores').deleteMany({ teamId });
   await db.collection('leaderboard').deleteMany({ teamId });
   await db.collection('feedback').deleteMany({ teamId });
+  await deleteSubmissions({ teamId });
   res.json({ message: 'Team removed from the event' });
 });
 
@@ -97,7 +108,7 @@ router.get('/team/me', requireTeam, async (req, res) => {
     .toArray();
 
   res.json({
-    team: { _id: account._id, name: account.name, members: account.members, code: account.code, demo: account.demo === true },
+    team: { _id: account._id, name: account.name, members: account.members, code: account.code },
     events,
     invitations,
   });
@@ -112,7 +123,7 @@ router.get('/team/events/:eventId', requireTeam, async (req, res) => {
 
   const event = await db
     .collection('events')
-    .findOne({ _id: eventId }, { projection: { name: 1, status: 1, rubric: 1, demo: 1 } });
+    .findOne({ _id: eventId }, { projection: { name: 1, status: 1, rubric: 1 } });
   if (!event) throw httpError(404, 'Event not found');
 
   // This team's row on the leaderboard (written by the aggregation's $merge).
@@ -153,7 +164,7 @@ router.get('/team/events/:eventId', requireTeam, async (req, res) => {
 
   res.json({
     team: { _id: team._id, name: team.name, members: team.members },
-    event: { _id: event._id, name: event.name, status: event.status, rubric: event.rubric, demo: event.demo === true },
+    event: { _id: event._id, name: event.name, status: event.status, rubric: event.rubric },
     standing: standing
       ? { rank: standing.rank, avgScore: standing.avgScore, judgesCount: standing.judgesCount }
       : null,
@@ -164,6 +175,7 @@ router.get('/team/events/:eventId', requireTeam, async (req, res) => {
     }),
     judgeScores,
     feedback,
+    submission: publicSubmission(await db.collection('submissions').findOne({ teamId: team._id })),
   });
 });
 
