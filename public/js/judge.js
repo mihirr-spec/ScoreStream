@@ -5,6 +5,36 @@
 requireLogin('judge');
 $('refresh-btn').addEventListener('click', () => safely(loadDashboard));
 
+// Tabs (All / To score / Scored) and the top-bar search only show or hide cards.
+let teamFilter = 'all';
+function applyFilter() {
+  const query = $('team-search').value.trim().toLowerCase();
+  let visible = 0;
+  for (const card of $('team-cards').children) {
+    const show =
+      (teamFilter === 'all' || card.dataset.state === teamFilter) && card.dataset.name.toLowerCase().includes(query);
+    card.classList.toggle('hidden', !show);
+    if (show) visible++;
+  }
+  const none = $('no-teams');
+  none.classList.toggle('hidden', visible > 0);
+  none.textContent = $('team-cards').children.length === 0 ? 'No teams in this event yet.' : 'No teams match.';
+}
+for (const tab of document.querySelectorAll('.tab')) {
+  tab.addEventListener('click', () => {
+    teamFilter = tab.dataset.filter;
+    for (const t of document.querySelectorAll('.tab')) {
+      t.classList.toggle('active', t === tab);
+      t.setAttribute('aria-selected', String(t === tab));
+    }
+    applyFilter();
+  });
+}
+$('team-search').addEventListener('input', () => {
+  applyFilter();
+  $('teams-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+
 // Same formula as services/scoring.js - only used for the live preview.
 function previewTotal(rubric, criteria) {
   let sum = 0;
@@ -16,8 +46,10 @@ async function loadDashboard() {
   const { judge, event, teams, myScores } = await api('GET', '/api/judge/me', undefined, 'judge');
 
   setupUserBar('judge', judge.name);
+  setupShell(judge.name);
+  $('section-context').textContent = event.name;
   $('event-name').textContent = event.name;
-  $('event-status').replaceChildren(badge(event.status));
+  $('event-status').replaceChildren(el('span', event.status, `pill ${event.status}`));
   $('leaderboard-link').href = `leaderboard.html?event=${event._id}`;
   $('not-live').classList.toggle('hidden', event.status === 'live');
   $('demo-banner').classList.toggle('hidden', !event.demo);
@@ -31,7 +63,6 @@ async function loadDashboard() {
 
   const cards = $('team-cards');
   cards.replaceChildren();
-  if (teams.length === 0) cards.append(el('div', 'No teams in this event yet.', 'card empty'));
 
   // Unscored teams first, so the judge sees what is left to do.
   const sorted = [...teams].sort((a, b) => {
@@ -43,13 +74,16 @@ async function loadDashboard() {
     const existing = myScores.find((s) => s.teamId === team._id);
     cards.append(buildTeamCard(event, team, existing));
   }
+  applyFilter();
 }
 
 // One card per team: a slider per rubric criterion, a comment and a submit button.
 function buildTeamCard(event, team, existing) {
   const card = el('section', null, 'card score-card');
-  const head = el('div', null, 'card-head');
-  head.append(el('h3', team.name), existing ? badge('scored', 'live') : badge('not scored', 'draft'));
+  card.dataset.name = team.name;
+  card.dataset.state = existing ? 'done' : 'todo';
+  const head = el('div', null, 'section-head');
+  head.append(el('h3', team.name), el('span', existing ? 'scored' : 'not scored', `pill ${existing ? 'live' : 'draft'}`));
   card.append(head, el('div', team.members.join(', ') || 'No members listed', 'members'));
 
   const form = el('form');
@@ -103,7 +137,7 @@ function buildTeamCard(event, team, existing) {
 
   const totalRow = el('div', null, 'total-row');
   const total = el('div', null, 'total-big');
-  const button = el('button', existing ? 'Update score' : 'Submit score', 'btn btn-primary');
+  const button = el('button', existing ? 'Update score' : 'Submit score', 'primary');
   button.type = 'submit';
   button.disabled = event.status !== 'live';
   totalRow.append(total, button);

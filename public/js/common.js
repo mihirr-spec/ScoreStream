@@ -110,6 +110,46 @@ function setupUserBar(role, name) {
   if (btn) btn.addEventListener('click', () => logout(role));
 }
 
+// Judge and Team pages: account menu in the top bar, and sidebar buttons that
+// scroll to a section (data-target) and show its name in the breadcrumb.
+function setupShell(name) {
+  const avatar = $('avatar');
+  if (avatar) avatar.textContent = name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || '?';
+
+  const account = $('account');
+  const menu = $('account-menu');
+  if (account && menu && !account.dataset.ready) {
+    account.dataset.ready = '1';
+    account.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const opening = menu.classList.contains('hidden');
+      menu.classList.toggle('hidden', !opening);
+      account.setAttribute('aria-expanded', String(opening));
+    });
+    document.addEventListener('click', () => {
+      menu.classList.add('hidden');
+      account.setAttribute('aria-expanded', 'false');
+    });
+  }
+
+  const nav = $('side-nav');
+  if (nav && !nav.dataset.ready) {
+    nav.dataset.ready = '1';
+    nav.addEventListener('click', (e) => {
+      const button = e.target.closest('button.nav-item');
+      if (!button) return;
+      for (const item of nav.querySelectorAll('.nav-item')) {
+        item.classList.toggle('active', item === button);
+        item.removeAttribute('aria-current');
+      }
+      button.setAttribute('aria-current', 'page');
+      $('section-context').textContent = button.dataset.section;
+      if (button.dataset.target === 'top') window.scrollTo({ top: 0, behavior: 'smooth' });
+      else $(button.dataset.target).scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+}
+
 // Badge element for an event status or sentiment label.
 function badge(text, kind) {
   return el('span', text, `badge ${kind || text}`);

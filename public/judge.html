@@ -6,63 +6,114 @@
   <title>Judge - ScoreStream</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script>
     // Apply the saved theme (light/dark) before the page is drawn.
     try { if (localStorage.getItem('theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch (e) {}
   </script>
   <link rel="icon" type="image/png" href="img/favicon.png">
-  <link rel="stylesheet" href="css/style.css?v=12">
+  <link rel="stylesheet" href="css/app.css?v=13">
 </head>
 <body>
-  <header class="nav">
-    <div class="container nav-inner">
-      <a class="logo" href="index.html">
-        <img class="logo-img" src="img/logo.webp" alt="" width="34" height="34">
-        ScoreStream
+  <aside class="sidebar" aria-label="Primary sidebar">
+    <a class="brand" href="index.html">
+      <img class="brand-mark" src="img/logo.webp" alt="" width="32" height="32">
+      <span class="brand-name">ScoreStream</span>
+    </a>
+    <nav aria-label="Main navigation" id="side-nav">
+      <button type="button" class="nav-item active" data-section="Overview" data-target="top" aria-current="page">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        <span>Overview</span>
+      </button>
+      <button type="button" class="nav-item" data-section="Score teams" data-target="teams-section">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg>
+        <span>Score teams</span>
+      </button>
+      <a class="nav-item" id="leaderboard-link" target="_blank">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 20V11m7 9V4m7 16v-7"/></svg>
+        <span>Leaderboard ↗</span>
       </a>
-      <div class="nav-actions">
-        <button class="icon-btn theme-toggle" type="button" aria-label="Switch between light and dark mode">
-          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
-          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+    </nav>
+    <div class="side-foot">Judge workspace</div>
+  </aside>
+
+  <header class="topbar">
+    <div class="crumbs"><span class="muted">Judging</span><span class="muted">/</span><strong id="section-context">Overview</strong></div>
+    <div class="top-actions">
+      <label class="search-top" for="team-search"><span aria-hidden="true">⌕</span><input id="team-search" aria-label="Search teams" placeholder="Search teams"></label>
+      <button type="button" class="icon-button theme-toggle" aria-label="Switch between light and dark mode">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      </button>
+      <span class="overflow-wrap">
+        <button type="button" id="account" class="account" aria-haspopup="true" aria-expanded="false">
+          <span class="avatar" id="avatar">J</span>
+          <span class="user-name-wrap"><span class="user-name" id="user-name"></span><span class="user-role">Judge</span></span>
+          <span aria-hidden="true" class="muted">⌄</span>
         </button>
-        <a class="btn btn-ghost btn-sm hide-sm" id="leaderboard-link" target="_blank">Leaderboard</a>
-        <span class="user-chip">⚖️ <span class="role-name">Judge:</span> <span id="user-name"></span></span>
-        <button class="btn btn-ghost btn-sm" id="logout-btn" type="button">Log out</button>
-      </div>
+        <span class="overflow-menu hidden" id="account-menu">
+          <button type="button" id="logout-btn" class="danger">Log out</button>
+        </span>
+      </span>
     </div>
   </header>
 
-  <main class="app">
-    <div class="container">
-      <div class="page-head">
-        <div>
-          <h1 id="event-name">Loading...</h1>
-          <div class="sub"><span id="event-status"></span><span>Score each team. You can edit your score while the event is live.</span></div>
-        </div>
-        <button class="btn btn-ghost btn-sm" id="refresh-btn" type="button">Refresh</button>
-      </div>
+  <main class="main" id="top">
+    <div id="demo-banner" class="banner hidden">⭐ <strong>Demo judge.</strong> Rate the sample teams with the stars, then open the leaderboard to watch the ranking change live.</div>
 
-      <div id="demo-banner" class="demo-banner hidden">
-        <span>⭐ <strong>Demo judge.</strong> Rate the 3 sample teams with the stars, then open the leaderboard to watch the ranking change live.</span>
+    <div class="page-heading">
+      <div>
+        <h1 id="event-name">Loading...</h1>
+        <div class="heading-meta"><span id="event-status"></span><span>Score each team. You can edit your score while the event is live.</span></div>
       </div>
-
-      <div class="stats">
-        <div class="stat"><div class="label">Teams</div><div class="value" id="stat-teams">0</div></div>
-        <div class="stat"><div class="label">Scored by you</div><div class="value" id="stat-done">0</div></div>
-        <div class="stat"><div class="label">Remaining</div><div class="value" id="stat-left">0</div></div>
-        <div class="stat"><div class="label">Your average</div><div class="value" id="stat-avg">-</div></div>
-      </div>
-
-      <div id="not-live" class="card hidden" style="margin-bottom:18px">
-        <strong>Scoring is closed.</strong> <span class="muted">This event is not live, so marks cannot be submitted or changed.</span>
-      </div>
-
-      <div class="team-grid" id="team-cards"></div>
+      <button type="button" class="secondary" id="refresh-btn">Refresh</button>
     </div>
+
+    <section class="kpis" aria-label="Your progress">
+      <article class="card kpi">
+        <div class="kpi-top"><span>Teams</span><span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M17 5a3 3 0 0 1 0 6m2 4a5 5 0 0 1 2 4v1"/></svg></span></div>
+        <div class="kpi-number" id="stat-teams">0</div>
+        <p class="kpi-note">In this event</p>
+      </article>
+      <article class="card kpi">
+        <div class="kpi-top"><span>Scored by You</span><span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 5 5L20 7"/></svg></span></div>
+        <div class="kpi-number" id="stat-done">0</div>
+        <p class="kpi-note">Submitted scores</p>
+      </article>
+      <article class="card kpi">
+        <div class="kpi-top"><span>Remaining</span><span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span></div>
+        <div class="kpi-number" id="stat-left">0</div>
+        <p class="kpi-note">Teams still to score</p>
+      </article>
+      <article class="card kpi">
+        <div class="kpi-top"><span>Your Average</span><span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 20V11m7 9V4m7 16v-7"/></svg></span></div>
+        <div class="kpi-number" id="stat-avg">-</div>
+        <p class="kpi-note">Out of 10</p>
+      </article>
+    </section>
+
+    <div id="not-live" class="banner hidden"><strong>Scoring is closed.</strong> This event is not live, so marks cannot be submitted or changed.</div>
+
+    <section id="teams-section" class="card section-card">
+      <div class="section-head">
+        <div>
+          <h2>Score teams</h2>
+          <p class="section-sub">Click the stars for a quick rating, or drag the slider to fine-tune. Your comment feeds the AI feedback.</p>
+        </div>
+      </div>
+      <div class="table-tools">
+        <div class="tabs" role="tablist" aria-label="Filter teams">
+          <button type="button" role="tab" aria-selected="true" class="tab active" data-filter="all">All</button>
+          <button type="button" role="tab" aria-selected="false" class="tab" data-filter="todo">To score</button>
+          <button type="button" role="tab" aria-selected="false" class="tab" data-filter="done">Scored</button>
+        </div>
+      </div>
+      <div class="score-grid" id="team-cards"></div>
+      <p id="no-teams" class="empty-row hidden"></p>
+    </section>
   </main>
 
-  <script src="js/common.js?v=12"></script>
-  <script src="js/judge.js?v=12"></script>
+  <script src="js/common.js?v=13"></script>
+  <script src="js/judge.js?v=13"></script>
 </body>
 </html>

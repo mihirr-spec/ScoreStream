@@ -20,7 +20,29 @@ const router = express.Router();
 router.get('/events', requireAdmin, async (req, res) => {
   // A demo admin only sees the demo event, a registered admin only the events they created.
   const filter = req.demoEventId ? { demo: true } : req.adminId ? { ownerId: req.adminId } : {};
-  const events = await getDb().collection('events').find(filter).sort({ createdAt: -1 }).toArray();
+  // Each event also gets teamCount, judgeCount and scoreCount for the dashboard table.
+  // A $lookup with a sub-pipeline that only $counts, so no team/judge documents are copied.
+  const countOf = (from) => [
+    { $lookup: { from, let: { id: '$_id' }, pipeline: [{ $match: { $expr: { $eq: ['$eventId', '$$id'] } } }, { $count: 'n' }], as: from } },
+  ];
+  const events = await getDb()
+    .collection('events')
+    .aggregate([
+      { $match: filter },
+      { $sort: { createdAt: -1 } },
+      ...countOf('teams'),
+      ...countOf('judges'),
+      ...countOf('scores'),
+      {
+        $set: {
+          teamCount: { $ifNull: [{ $first: '$teams.n' }, 0] },
+          judgeCount: { $ifNull: [{ $first: '$judges.n' }, 0] },
+          scoreCount: { $ifNull: [{ $first: '$scores.n' }, 0] },
+        },
+      },
+      { $project: { teams: 0, judges: 0, scores: 0 } },
+    ])
+    .toArray();
   res.json(events);
 });
 
@@ -93,8 +115,9 @@ router.patch('/events/:id', requireAdmin, async (req, res) => {
   // Closing the event = judging is over: lock in the final ranking and start writing
   // AI feedback for every team. Feedback runs in the BACKGROUND (one team at a time
   // can take a while with a real AI), so the admin gets an answer straight away.
+  // Any status change also refreshes the ranking, so it can never stay out of date.
+  if (changes.status) await recomputeLeaderboard(eventId);
   if (changes.status === 'closed') {
-    await recomputeLeaderboard(eventId);
     generateEventFeedback(eventId).catch((err) => console.error(`[feedback] event ${eventId}: ${err.message}`));
   }
   res.json(updated);

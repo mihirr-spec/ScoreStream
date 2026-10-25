@@ -6,24 +6,20 @@ requireLogin('team');
 let teamId = null;
 let liveSource = null;
 
-// Fills the rank card and the score ring.
+// Fills the rank, average and judges KPI cards.
 function showStanding(standing, totalTeams) {
   if (!standing) {
     $('rank').textContent = '-';
     $('rank-note').textContent = 'Waiting for the first judge to score you.';
     $('avg').textContent = '-';
-    $('ring-text').textContent = '-';
-    $('judges').textContent = '0 judges have scored you';
+    $('judges').textContent = '0';
     $('team-stars').replaceChildren(stars(0));
     return;
   }
   $('rank').replaceChildren(`#${standing.rank}`, el('small', ` of ${totalTeams}`));
-  $('rank-note').textContent = standing.rank === 1 ? 'You are leading the event!' : `Keep going - ${standing.rank - 1} team(s) ahead of you.`;
+  $('rank-note').textContent = standing.rank === 1 ? 'You are leading the event!' : `${standing.rank - 1} team(s) ahead of you`;
   $('avg').textContent = standing.avgScore.toFixed(2);
-  $('ring-text').textContent = standing.avgScore.toFixed(1);
-  // The ring's full circumference is 314.16; offset shows the unfilled part.
-  $('ring-fill').style.strokeDashoffset = String(314.16 * (1 - standing.avgScore / 10));
-  $('judges').textContent = `${standing.judgesCount} judge(s) have scored you`;
+  $('judges').textContent = standing.judgesCount;
   $('team-stars').replaceChildren(starsFromScore(standing.avgScore));
 }
 
@@ -48,7 +44,7 @@ function showJudgeScores(rubric, judgeScores) {
   const table = $('judge-scores');
   table.replaceChildren();
   if (judgeScores.length === 0) {
-    table.append(el('caption', 'No judge has scored you yet.', 'empty'));
+    table.append(el('caption', 'No judge has scored you yet.', 'empty-row'));
     return;
   }
   const head = el('tr');
@@ -56,11 +52,11 @@ function showJudgeScores(rubric, judgeScores) {
   table.append(head);
   for (const s of judgeScores) {
     const row = el('tr');
-    row.append(el('td', s.judgeName));
+    row.append(el('td', s.judgeName, 'event-name'));
     for (const r of rubric) row.append(el('td', s.criteria[r.key] ?? '-'));
     const total = el('td');
     total.append(el('strong', s.total));
-    row.append(total, el('td', s.comment || '-', 'muted small'));
+    row.append(total, el('td', s.comment || '-'));
     table.append(row);
   }
 }
@@ -69,20 +65,20 @@ function showFeedback(event, feedback) {
   const box = $('feedback');
   box.replaceChildren();
 
+  $('feedback-state').textContent = event.status !== 'closed' ? 'Locked' : feedback ? 'Ready' : 'Writing...';
   if (event.status !== 'closed') {
-    box.append(el('p', '🔒 Your feedback unlocks when the organiser closes the event. Judges are still scoring.', 'muted'));
+    box.append(el('p', '🔒 Your feedback unlocks when the organiser ends the event. Judges are still scoring.', 'empty-text'));
     return;
   }
   if (!feedback) {
-    box.append(el('p', "✨ The event is closed. Your AI feedback is being written from the judges' comments - check back in a minute.", 'muted'));
+    box.append(el('p', "✨ The event is closed. Your AI feedback is being written from the judges' comments - check back in a minute.", 'empty-text'));
     return;
   }
 
-  const title = el('div', null, 'row');
-  title.style.marginBottom = '10px';
-  title.append(badge(`${feedback.sentiment.label} (${feedback.sentiment.score})`, feedback.sentiment.label));
-  if (feedback.source === 'mock') title.append(badge('mock'));
-  box.append(title, el('p', feedback.summary));
+  const title = el('div', null, 'action-row');
+  title.append(el('span', `${feedback.sentiment.label} (${feedback.sentiment.score})`, `pill ${feedback.sentiment.label}`));
+  if (feedback.source === 'mock') title.append(el('span', 'mock', 'pill mock'));
+  box.append(title, el('p', feedback.summary, 'feedback-summary'));
 
   const cols = el('div', null, 'feedback-cols');
   for (const [heading, points] of [['💪 Strengths', feedback.strengths], ['🎯 Improvements', feedback.improvements]]) {
@@ -101,10 +97,11 @@ async function load() {
   teamId = data.team._id;
 
   setupUserBar('team', data.team.name);
+  setupShell(data.team.name);
   $('team-name').textContent = data.team.name;
   $('event-name').textContent = data.event.name;
-  $('event-status').replaceChildren(badge(data.event.status));
-  $('members').textContent = data.team.members.join(', ');
+  $('event-status').replaceChildren(el('span', data.event.status, `pill ${data.event.status}`));
+  $('members').textContent = data.team.members.length ? `·  ${data.team.members.join(', ')}` : '';
   $('leaderboard-link').href = `leaderboard.html?event=${data.event._id}`;
   $('demo-banner').classList.toggle('hidden', !data.event.demo);
 
