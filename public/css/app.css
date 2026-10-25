@@ -380,3 +380,8 @@ body.no-scroll { overflow: hidden; }
   .viewer-backdrop { padding: 0; }
   .viewer { border-radius: 0; height: 100%; }
 }
+
+/* "Test AI connection" results on the admin Rankings page. */
+.error-text { color: var(--red); font-weight: 600; }
+#ai-check p { margin: 0 0 8px; line-height: 1.5; }
+#ai-check code { display: inline-block; margin-top: 3px; font-size: 12px; color: var(--red); word-break: break-word; white-space: normal; }

@@ -5,6 +5,7 @@ const { getDb } = require('../db');
 const { requireAdmin, assertEventAccess } = require('../middleware/auth');
 const { httpError, parseId } = require('../middleware/validate');
 const { generateEventFeedback } = require('../services/feedback');
+const { checkAi } = require('../services/ai');
 
 const router = express.Router();
 
@@ -22,6 +23,12 @@ router.post('/events/:eventId/feedback/generate', requireAdmin, async (req, res)
   // If closing the event already started generating, this waits for that same run.
   const results = await generateEventFeedback(eventId);
   res.json({ generated: results.length, feedback: results });
+});
+
+// GET /api/ai/check  (admin) -> asks each configured AI model for a tiny answer and
+// reports which ones work, with the provider's error message if not. No keys are returned.
+router.get('/ai/check', requireAdmin, async (req, res) => {
+  res.json(await checkAi());
 });
 
 // GET /api/events/:eventId/feedback  (public, shown on the leaderboard page)

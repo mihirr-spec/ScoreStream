@@ -103,58 +103,137 @@ async function callModel(provider, teamName, comments, scoreSummary) {
 }
 
 // Offline fallback. Very simple word counting, clearly marked as MOCK.
-function mockFeedback(comments, reason) {
-  const text = comments.join(' ').toLowerCase();
-  const goodWords = ['great', 'good', 'excellent', 'strong', 'clear', 'impressive', 'creative', 'well', 'nice', 'solid'];
-  const badWords = ['weak', 'poor', 'unclear', 'missing', 'slow', 'confusing', 'lacks', 'bug', 'incomplete', 'needs'];
-  const good = goodWords.filter((w) => text.includes(w)).length;
-  const bad = badWords.filter((w) => text.includes(w)).length;
-  const score = good + bad === 0 ? 0 : Math.round(((good - bad) / (good + bad)) * 100) / 100;
-  const label = score > 0.2 ? 'positive' : score < -0.2 ? 'negative' : 'neutral';
+// Fallback when no AI answers: a simple rule-based reader of the judges' notes.
+// Each note is split into phrases ("Ui is nice | laggy the slides could have been better").
+// A phrase with a criticism word is an improvement, one with a praise word a strength,
+// and the topic words in it (UI, speed, slides, ...) pick a clean sentence to show.
+const PRAISE = /\b(nice|good|great|excellent|strong|clear|impressive|creative|well|solid|clean|cool|love[ds]?|innovative|smooth|amazing|awesome|neat|helpful|useful|polished)\b/;
+const CRITICISM =
+  /\b(slow|lag\w*|latency|bug\w*|crash\w*|weak|poor|unclear|confusing|missing|lacks?|lacking|incomplete|needs?|need(ed)?|requir\w*|should|could|improve\w*|better|not|no|hard|difficult|broken|basic|limited|messy|issues?|problems?)\b/;
+const TOPICS = [
+  { words: /\b(ui|ux|design|interface|look\w*|layout|visual\w*|frontend|front-end)\b/, good: 'A well-designed, appealing user interface', bad: 'Refine the user interface and overall design' },
+  { words: /\b(lag\w*|slow\w*|latency|performance|speed|fast|responsive\w*|load\w*)\b/, good: 'Fast and responsive in use', bad: 'Improve performance - judges found it slow or laggy' },
+  { words: /\b(slides?|ppt|deck|presentation|pitch\w*|demo)\b/, good: 'A clear presentation and pitch', bad: 'Strengthen your slides and presentation' },
+  { words: /\b(functionality|features?|functions?|scope|requir\w*)\b/, good: 'Useful functionality', bad: 'Add more functionality - judges expected more features' },
+  { words: /\b(idea|concept|innovat\w*|original\w*|creative\w*|problem)\b/, good: 'A strong, original idea', bad: 'Sharpen the idea and the problem it solves' },
+  { words: /\b(bug\w*|crash\w*|error\w*|stab\w*|broken)\b/, good: 'Stable and reliable', bad: 'Fix bugs and stability issues' },
+  { words: /\b(code|backend|architecture|implementation|execution|tech\w*)\b/, good: 'Solid technical execution', bad: 'Improve the technical execution' },
+  { words: /\b(docs?|documentation|readme|explain\w*)\b/, good: 'Well documented', bad: 'Document and explain your project better' },
+];
 
+function tidy(phrase) {
+  const text = phrase.trim().replace(/\s+/g, ' ');
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function mockFeedback(comments, reason, scoreSummary = '') {
+  const strengths = new Set();
+  const improvements = new Set();
+  for (const comment of comments) {
+    const phrases = comment.toLowerCase().split(/[.,;!?\n]+|\b(?:but|however|although|though|and|also)\b/);
+    for (const phrase of phrases) {
+      if (!phrase.trim()) continue;
+      const critical = CRITICISM.test(phrase);
+      const praised = PRAISE.test(phrase) && !critical;
+      if (!critical && !praised) continue;
+      const topics = TOPICS.filter((t) => t.words.test(phrase));
+      if (topics.length === 0) (critical ? improvements : strengths).add(tidy(phrase));
+      for (const topic of topics) (critical ? improvements : strengths).add(critical ? topic.bad : topic.good);
+    }
+  }
+
+  const good = strengths.size;
+  const bad = improvements.size;
+  let score = good + bad === 0 ? 0 : (good - bad) / (good + bad);
+  // Weigh in the team's average too: 5/10 is neutral, 10/10 very positive.
+  const average = Number((scoreSummary.match(/average ([\d.]+)\/10/) || [])[1]);
+  if (Number.isFinite(average)) score = (score + (average - 5) / 5) / 2;
+  score = Math.round(Math.max(-1, Math.min(1, score)) * 100) / 100;
+  const label = score > 0.2 ? 'positive' : score < -0.2 ? 'negative' : 'neutral';
+  const lower = (s) => s.charAt(0).toLowerCase() + s.slice(1);
+  const parts = [];
+  if (good) parts.push(`The judges appreciated ${[...strengths].slice(0, 2).map(lower).join(' and ')}.`);
+  if (bad) parts.push(`Their main suggestions: ${[...improvements].slice(0, 2).map(lower).join('; ')}.`);
+  if (!parts.length) parts.push(`The judges left ${comments.length} comment(s) for your team.`);
+
+  console.warn(`[ai] using rule-based feedback: ${reason}`);
   return {
-    summary: `[MOCK - ${reason}] Based on ${comments.length} judge comment(s), the overall tone was ${label}.`,
-    strengths: good > 0 ? ['[MOCK] Judges used positive words such as "good" or "clear"'] : [],
-    improvements: bad > 0 ? ['[MOCK] Judges pointed out some weak or missing areas'] : [],
+    summary: parts.join(' '),
+    strengths: [...strengths].slice(0, 4),
+    improvements: [...improvements].slice(0, 4),
     sentiment: { label, score },
     source: 'mock',
+    // Why the real AI wasn't used - shown to the admin (never to teams).
+    aiError: reason,
   };
 }
 
-// Main function used by services/feedback.js.
-// scoreSummary is optional text like "average 7.4/10, rank 2 of 5; Design 8/10, ...".
-// Returns { summary, strengths, improvements, sentiment: {label, score}, source: 'ai'|'mock' }
-async function generateTeamFeedback(teamName, comments, scoreSummary = '') {
-  if (comments.length === 0) {
-    return mockFeedback(comments, 'no judge comments to summarise');
-  }
-  if (config.aiForceMock || !config.aiApiKey) {
-    return mockFeedback(comments, 'no AI_API_KEY set');
-  }
-
-  // Main model first, then the fallback model (if one is set in .env).
-  // The fallback uses its own base URL / key when given, otherwise the main ones.
-  const providers = [{ baseUrl: config.aiBaseUrl, apiKey: config.aiApiKey, model: config.aiModel }];
+// Main model first, then the fallback model (if one is set in .env).
+// The fallback uses its own base URL / key when given, otherwise the main ones.
+function getProviders() {
+  const providers = [{ name: 'Main', baseUrl: config.aiBaseUrl, apiKey: config.aiApiKey, model: config.aiModel }];
   if (config.aiFallbackModel) {
     providers.push({
+      name: 'Fallback',
       baseUrl: config.aiFallbackBaseUrl || config.aiBaseUrl,
       apiKey: config.aiFallbackApiKey || config.aiApiKey,
       model: config.aiFallbackModel,
     });
   }
+  return providers;
+}
+
+// Main function used by services/feedback.js.
+// scoreSummary is optional text like "average 7.4/10, rank 2 of 5; Design 8/10, ...".
+// Returns { summary, strengths, improvements, sentiment: {label, score}, source: 'ai'|'mock', aiError? }
+async function generateTeamFeedback(teamName, comments, scoreSummary = '') {
+  if (comments.length === 0) {
+    return mockFeedback(comments, 'no judge comments to summarise');
+  }
+  if (config.aiForceMock) return mockFeedback(comments, 'AI_FORCE_MOCK is on', scoreSummary);
+  if (!config.aiApiKey) return mockFeedback(comments, 'AI_API_KEY is not set on the server', scoreSummary);
 
   // Each model gets two tries: the first try, plus ONE retry (e.g. if it returned bad JSON).
-  for (const provider of providers) {
+  // A rate limit (HTTP 429, common on free models) waits a few seconds before the retry.
+  const errors = [];
+  for (const provider of getProviders()) {
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
         const result = await callModel(provider, teamName, comments, scoreSummary);
         return { ...result, source: 'ai' };
       } catch (err) {
         console.error(`[ai] ${provider.model} attempt ${attempt} for "${teamName}" failed: ${err.message}`);
+        if (attempt === 2) errors.push(`${provider.name} model (${provider.model}): ${err.message}`);
+        else if (/HTTP 429/.test(err.message)) await new Promise((resolve) => setTimeout(resolve, 5000));
       }
     }
   }
-  return mockFeedback(comments, 'AI request failed after retries');
+  return mockFeedback(comments, errors.join(' | ').slice(0, 600), scoreSummary);
+}
+
+// Admin "Test AI" button: one tiny request to each configured model.
+// Reports whether each answered and the provider's error if not. Never returns keys.
+async function checkAi() {
+  const settings = {
+    AI_API_KEY: Boolean(config.aiApiKey),
+    AI_FALLBACK_API_KEY: Boolean(config.aiFallbackApiKey),
+    AI_FORCE_MOCK: Boolean(config.aiForceMock),
+  };
+  const results = [];
+  for (const provider of getProviders()) {
+    const started = Date.now();
+    const row = { name: provider.name, model: provider.model, host: new URL(provider.baseUrl).host, keySet: Boolean(provider.apiKey) };
+    try {
+      await callModel(provider, 'Test team', ['nice UI but a bit slow'], '');
+      row.ok = true;
+    } catch (err) {
+      row.ok = false;
+      row.error = err.name === 'TimeoutError' ? 'No answer within 60 seconds' : err.message;
+    }
+    row.ms = Date.now() - started;
+    results.push(row);
+  }
+  return { settings, results };
 }
 
 // True when real AI calls will be made (used to pause between teams for rate limits).
@@ -162,4 +241,4 @@ function usingRealAi() {
   return Boolean(config.aiApiKey) && !config.aiForceMock;
 }
 
-module.exports = { generateTeamFeedback, usingRealAi, stripCodeFence };
+module.exports = { generateTeamFeedback, checkAi, usingRealAi, stripCodeFence };

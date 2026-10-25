@@ -12,7 +12,7 @@
     try { if (localStorage.getItem('theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch (e) {}
   </script>
   <link rel="icon" type="image/png" href="img/favicon.png">
-  <link rel="stylesheet" href="css/app.css?v=21">
+  <link rel="stylesheet" href="css/app.css?v=22">
 </head>
 <body>
   <aside class="sidebar" aria-label="Primary sidebar">
@@ -274,7 +274,12 @@
             </div>
           </div>
           <div id="feedback-list" class="feedback-scroll"></div>
-          <button type="button" id="generate-feedback" class="secondary">Regenerate feedback</button>
+          <div id="ai-warning" class="banner hidden" style="margin-top:12px"></div>
+          <div class="action-row" style="margin-top:12px">
+            <button type="button" id="generate-feedback" class="secondary">Regenerate feedback</button>
+            <button type="button" id="test-ai" class="secondary">Test AI connection</button>
+          </div>
+          <div id="ai-check" class="small" style="margin-top:10px"></div>
         </article>
       </div>
       <section class="card section-card" style="margin-top:18px">
@@ -349,7 +354,7 @@
     </div>
   </div>
 
-  <script src="js/common.js?v=21"></script>
-  <script src="js/admin.js?v=21"></script>
+  <script src="js/common.js?v=22"></script>
+  <script src="js/admin.js?v=22"></script>
 </body>
 </html>

@@ -829,14 +829,22 @@ async function loadFeedback() {
   if (items.length === 0) {
     list.append(el('p', selectedEvent.status === 'closed' ? 'Writing feedback...' : 'Feedback appears here after the event ends.', 'empty-text'));
   }
+  let mockCount = 0;
   for (const f of items) {
     const quote = el('div', null, 'feedback-quote');
     const title = el('strong', f.teamName);
     title.append(pill(f.sentiment.label));
     if (f.source === 'mock') title.append(pill('mock'));
+    mockCount += f.source === 'mock' ? 1 : 0;
     quote.append(title, f.summary);
     list.append(quote);
   }
+  // "mock" = the AI could not be reached, so simple automatic feedback was written instead.
+  $('ai-warning').classList.toggle('hidden', mockCount === 0);
+  $('ai-warning').replaceChildren(
+    el('strong', `The AI was not reached for ${mockCount} team(s). `),
+    'They got simple automatic feedback instead. Click "Test AI connection" to see why, fix it, then Regenerate.'
+  );
   return items;
 }
 
@@ -866,6 +874,31 @@ $('generate-feedback').addEventListener('click', () =>
     } finally {
       btn.disabled = selectedEvent.status !== 'closed';
       btn.textContent = 'Regenerate feedback';
+    }
+  })
+);
+
+// Asks the server to try each AI model once and shows which work (and the error if not).
+$('test-ai').addEventListener('click', () =>
+  safely(async () => {
+    const btn = $('test-ai');
+    const box = $('ai-check');
+    btn.disabled = true;
+    box.replaceChildren('Testing the AI models... (can take up to a minute)');
+    try {
+      const { settings, results } = await adminApi('GET', '/api/ai/check');
+      box.replaceChildren();
+      if (!settings.AI_API_KEY) box.append(el('p', 'AI_API_KEY is not set on the server, so the AI is never called.', 'error-text'));
+      if (settings.AI_FORCE_MOCK) box.append(el('p', 'AI_FORCE_MOCK is on, so the AI is never called.', 'error-text'));
+      for (const r of results) {
+        const row = el('p');
+        row.append(el('strong', `${r.ok ? '✅' : '❌'} ${r.name}: ${r.model}`), ` (${r.host}, ${(r.ms / 1000).toFixed(1)}s)`);
+        if (!r.keySet) row.append(el('br'), 'No API key set for this model.');
+        if (r.error) row.append(el('br'), el('code', r.error));
+        box.append(row);
+      }
+    } finally {
+      btn.disabled = false;
     }
   })
 );

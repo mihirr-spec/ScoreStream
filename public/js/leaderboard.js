@@ -111,7 +111,6 @@ async function loadFeedback() {
     const card = el('div', null, 'card feedback-card');
     const title = el('h3', f.teamName);
     title.append(badge(f.sentiment.label));
-    if (f.source === 'mock') title.append(badge('mock'));
     card.append(title, el('p', f.summary, 'muted'));
     for (const [heading, points] of [['Strengths', f.strengths], ['Improvements', f.improvements]]) {
       if (points.length === 0) continue;

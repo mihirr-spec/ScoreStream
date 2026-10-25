@@ -269,7 +269,6 @@ function showFeedback(event, feedback) {
 
   const title = el('div', null, 'action-row');
   title.append(el('span', `${feedback.sentiment.label} (${feedback.sentiment.score})`, `pill ${feedback.sentiment.label}`));
-  if (feedback.source === 'mock') title.append(el('span', 'mock', 'pill mock'));
   box.append(title, el('p', feedback.summary, 'feedback-summary'));
 
   const cols = el('div', null, 'feedback-cols');
