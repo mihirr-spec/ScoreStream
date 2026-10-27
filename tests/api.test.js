@@ -401,8 +401,15 @@ test('extra: an open judge dashboard hears about a new invitation within 3 secon
     while (!text.includes('event: changed')) text += new TextDecoder().decode((await reader.read()).value);
   })();
 
+  // A fresh event: the shared one has already ended by now, and ended events refuse new judges.
+  const fresh = await api('POST', '/api/events', {
+    token: adminToken,
+    body: { name: 'Live Invite Event', rubric: [{ key: 'idea', label: 'Idea', max: 10, weight: 1 }] },
+  });
+  assert.equal(fresh.status, 201);
+
   const started = Date.now();
-  const invite = await api('POST', `/api/events/${eventId}/judges`, { token: adminToken, body: { code: reg.body.judge.code } });
+  const invite = await api('POST', `/api/events/${fresh.body._id}/judges`, { token: adminToken, body: { code: reg.body.judge.code } });
   assert.equal(invite.status, 201);
   await Promise.race([changed, new Promise((_, reject) => setTimeout(() => reject(new Error('no push within 3s')), 3000))]);
   assert.ok(Date.now() - started < 3000);
