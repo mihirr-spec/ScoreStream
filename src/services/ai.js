@@ -10,17 +10,22 @@
 
 const config = require('../config');
 
-const SYSTEM_PROMPT = `You are an assistant that turns judges' notes into one compiled piece of feedback for a team at a competition.
-Judges often write very short, rough notes with typos (e.g. "nice UI", "slow, laggy", "hgih latency").
-Interpret what each judge meant, merge points that say the same thing (e.g. "laggy" and "high latency"),
-and write clear, complete, encouraging feedback addressed to the team ("you"/"your"). Do not quote notes word for word.
+const SYSTEM_PROMPT = `You are an assistant that turns several judges' notes into one compiled piece of feedback for a team at a competition.
+Each numbered comment is from a different judge. Judges often write very short, rough notes with typos
+(e.g. "nice UI", "slow, laggi", "hgih latency", "gud design, ppt cud be better").
+Interpret what each judge meant and merge points that say the same thing (e.g. "laggy", "high latency" and
+"loading takes forever" are all one performance point). When several judges agree, say so ("most judges", "several judges").
+Write warm, professional, encouraging feedback addressed to the team ("you"/"your"), like a mentor would.
+Do not quote notes word for word and do not invent points no judge made.
 Use the scores, if given, to judge how strong each area was, but do not just repeat the numbers.
 Reply with JSON ONLY. No markdown, no code fences, no extra text.
 Use exactly this shape:
-{"summary": string (2-3 sentences),
- "strengths": [string, ...] (up to 4 short points),
- "improvements": [string, ...] (up to 4 short points),
- "sentiment": {"label": "positive" | "neutral" | "negative", "score": number from -1 to 1}}`;
+{"summary": string (3-4 flowing sentences: what impressed the judges, what held the project back, and an encouraging close),
+ "strengths": [string, ...] (1 to 4 short points, each a DIFFERENT point; fewer is fine, never pad or repeat),
+ "improvements": [string, ...] (1 to 4 short, actionable points, each a DIFFERENT point; never pad or repeat),
+ "sentiment": {"label": "positive" | "neutral" | "negative", "score": number from -1 to 1}}
+The sentiment is the judges' overall view: mostly praise or a high average (7/10 or more) is positive,
+mostly criticism or a low average (below 5/10) is negative, a real mix is neutral.`;
 
 // Models sometimes wrap JSON in ```json ... ``` even when told not to. Remove that.
 function stripCodeFence(text) {
@@ -203,8 +208,12 @@ async function generateTeamFeedback(teamName, comments, scoreSummary = '') {
         return { ...result, source: 'ai' };
       } catch (err) {
         console.error(`[ai] ${provider.model} attempt ${attempt} for "${teamName}" failed: ${err.message}`);
-        if (attempt === 2) errors.push(`${provider.name} model (${provider.model}): ${err.message}`);
-        else if (/HTTP 429/.test(err.message)) await new Promise((resolve) => setTimeout(resolve, 5000));
+        // A 404 means the model doesn't exist (or is no longer free) - retrying won't help.
+        if (attempt === 2 || /HTTP 404/.test(err.message)) {
+          errors.push(`${provider.name} model (${provider.model}): ${err.message}`);
+          break;
+        }
+        if (/HTTP 429/.test(err.message)) await new Promise((resolve) => setTimeout(resolve, 5000));
       }
     }
   }

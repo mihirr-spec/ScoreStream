@@ -79,6 +79,8 @@ router.post('/events/:eventId/judges', requireAdmin, async (req, res) => {
   };
   try {
     const { insertedId } = await db.collection('judgeInvitations').insertOne(invitation);
+    // The judge's open dashboard shows the invitation pop-up straight away.
+    sse.notifyJudges([account._id]);
     res.status(201).json({ _id: insertedId, name: account.name, code: account.code, createdAt: invitation.createdAt });
   } catch (err) {
     // unique_pending_invite: this judge already has an invitation waiting for this event.
@@ -113,6 +115,7 @@ router.delete('/judge-invitations/:id', requireAdmin, async (req, res) => {
   await assertEventAccess(req, invitation.eventId);
   if (invitation.status !== 'pending') throw httpError(409, 'The judge has already answered this invitation');
   await db.collection('judgeInvitations').deleteOne({ _id: id, status: 'pending' });
+  sse.notifyJudges([invitation.accountId]);
   res.json({ message: 'Invitation withdrawn' });
 });
 
@@ -130,6 +133,7 @@ router.delete('/judges/:id', requireAdmin, async (req, res) => {
   // The Change Stream only re-ranks LIVE events after a delete, so refresh this
   // event directly too (it might be draft or closed).
   await recomputeLeaderboard(judge.eventId);
+  sse.notifyJudges([judge.accountId]);
   res.json({ message: 'Judge removed from the event, with their scores' });
 });
 
@@ -192,6 +196,34 @@ router.get('/judge/me', requireJudge, async (req, res) => {
     .toArray();
 
   res.json({ judge: { _id: account._id, name: account.name, code: account.code }, events, invitations });
+});
+
+// GET /api/judge/stream?token=...  (Server-Sent Events)
+// The judge dashboard keeps this open; we send "changed" whenever an admin invites
+// this judge, withdraws an invitation, removes them, or starts/ends one of their events.
+// EventSource can't send an Authorization header, so the token comes in the URL instead.
+function tokenFromQuery(req, res, next) {
+  if (typeof req.query.token === 'string') req.headers.authorization = `Bearer ${req.query.token}`;
+  next();
+}
+
+router.get('/judge/stream', tokenFromQuery, requireJudge, (req, res) => {
+  res.set({
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+  });
+  res.flushHeaders();
+  res.write(': connected\n\n');
+
+  const key = sse.judgeChannel(req.judgeAccount._id);
+  sse.addClient(key, res);
+  // A comment line every 25s keeps proxies from closing an idle connection.
+  const heartbeat = setInterval(() => res.write(': keep-alive\n\n'), 25000);
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    sse.removeClient(key, res);
+  });
 });
 
 // POST /api/judge/invitations/:id  { accept: true | false }  -> the judge answers

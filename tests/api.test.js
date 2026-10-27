@@ -386,6 +386,29 @@ test('extra: judges join an event only by accepting an invitation', async () => 
   assert.equal(wrongEvent.status, 403);
 });
 
+test('extra: an open judge dashboard hears about a new invitation within 3 seconds', async () => {
+  const reg = await api('POST', '/api/auth/judge-register', { body: { name: 'Live Judge', password: 'judge-password' } });
+  // No or bad token -> the stream is refused.
+  assert.equal((await fetch(`${baseUrl}/api/judge/stream?token=bad`)).status, 401);
+
+  // Open the judge's live stream, like the dashboard does, and wait for a "changed" message.
+  const controller = new AbortController();
+  const res = await fetch(`${baseUrl}/api/judge/stream?token=${reg.body.token}`, { signal: controller.signal });
+  assert.equal(res.status, 200);
+  const reader = res.body.getReader();
+  const changed = (async () => {
+    let text = '';
+    while (!text.includes('event: changed')) text += new TextDecoder().decode((await reader.read()).value);
+  })();
+
+  const started = Date.now();
+  const invite = await api('POST', `/api/events/${eventId}/judges`, { token: adminToken, body: { code: reg.body.judge.code } });
+  assert.equal(invite.status, 201);
+  await Promise.race([changed, new Promise((_, reject) => setTimeout(() => reject(new Error('no push within 3s')), 3000))]);
+  assert.ok(Date.now() - started < 3000);
+  controller.abort();
+});
+
 test('extra: registered admins only see and manage their own events', async () => {
   const reg = await api('POST', '/api/auth/admin-register', { body: { username: 'organiser1', password: 'longpassword' } });
   assert.equal(reg.status, 201);

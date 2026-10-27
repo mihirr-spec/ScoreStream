@@ -40,4 +40,15 @@ function clientCount(eventId) {
   return clients ? clients.size : 0;
 }
 
-module.exports = { addClient, removeClient, sendTo, broadcast, clientCount };
+// Each judge ACCOUNT also has its own channel ("judge:<accountId>"), so their dashboard
+// hears about new or withdrawn invitations and event changes the moment they happen.
+function judgeChannel(accountId) {
+  return `judge:${accountId}`;
+}
+
+// Tells these judge accounts' open dashboards to reload their invitations and events.
+function notifyJudges(accountIds) {
+  for (const id of new Set(accountIds.map(String))) broadcast(judgeChannel(id), 'changed', {});
+}
+
+module.exports = { addClient, removeClient, sendTo, broadcast, clientCount, judgeChannel, notifyJudges };

@@ -90,6 +90,15 @@ p { margin: 0 0 14px; }
 .btn-primary:hover { background: var(--accent-dark); }
 .btn-ghost { background: var(--surface); color: var(--text); border-color: var(--border-strong); }
 .btn-ghost:hover { background: var(--bg-soft); }
+/* Header "Sign in" button: soft frosted glass so it sits lightly on the page instead of shouting. */
+.btn-signin {
+  background: rgba(233, 240, 255, 0.75); color: var(--text); font-weight: 500;
+  border-color: rgba(43, 95, 217, 0.18); border-radius: 12px;
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+.btn-signin:hover { background: rgba(220, 231, 255, 0.95); }
+[data-theme="dark"] .btn-signin { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.16); }
+[data-theme="dark"] .btn-signin:hover { background: rgba(255, 255, 255, 0.14); }
 .btn-danger { background: var(--surface); color: var(--red); border-color: #f1c4c4; }
 .btn-danger:hover { background: var(--red-soft); }
 .btn-sm { padding: 6px 13px; font-size: 0.85rem; }

@@ -500,5 +500,19 @@ safely(async () => {
   await loadMe();
   await route();
 });
-// Every 20s: check for new invitations (scoring updates arrive over the live stream).
-setInterval(() => safely(loadMe), 20000);
+// Live dashboard: the server pushes "changed" the moment an admin invites you, withdraws
+// an invitation or starts/ends one of your events, so the pop-up appears without a refresh.
+// EventSource reconnects by itself (about 3s) if the connection drops; on every (re)connect
+// we reload once, in case something changed while we were disconnected.
+function watchAccount() {
+  const stream = new EventSource(`/api/judge/stream?token=${encodeURIComponent(auth.get('judge'))}`);
+  let first = true;
+  stream.addEventListener('open', () => {
+    if (!first) safely(loadMe);
+    first = false;
+  });
+  stream.addEventListener('changed', () => safely(loadMe));
+}
+watchAccount();
+// Safety net in case the live connection is blocked (e.g. by a proxy).
+setInterval(() => safely(loadMe), 30000);

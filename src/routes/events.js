@@ -18,6 +18,14 @@ const {
 
 const router = express.Router();
 
+// Judge accounts that have a seat in the event or a pending invitation to it.
+async function judgeAccountsOf(eventId) {
+  const db = getDb();
+  const seats = await db.collection('judges').distinct('accountId', { eventId });
+  const invited = await db.collection('judgeInvitations').distinct('accountId', { eventId, status: 'pending' });
+  return [...seats, ...invited];
+}
+
 // GET /api/events  -> all events, newest first
 router.get('/events', requireAdmin, async (req, res) => {
   // A registered admin only sees the events they created; the .env admin sees all.
@@ -118,6 +126,9 @@ router.patch('/events/:id', requireAdmin, async (req, res) => {
   // can take a while with a real AI), so the admin gets an answer straight away.
   // Any status change also refreshes the ranking, so it can never stay out of date.
   if (changes.status) await recomputeLeaderboard(eventId);
+  // Judges in this event or invited to it see the change on their dashboard straight away
+  // (collected BEFORE closing deletes the pending invitations).
+  const judgeAccounts = changes.status ? await judgeAccountsOf(eventId) : [];
   if (changes.status === 'closed') {
     // Invitations nobody answered can't be accepted any more. (Judges keep their
     // seat, so they can still look back at their scores - scoring itself is closed.)
@@ -127,6 +138,7 @@ router.patch('/events/:id', requireAdmin, async (req, res) => {
   }
   // Tell open team and judge pages straight away, so nobody has to refresh.
   if (changes.status) sse.broadcast(eventId.toString(), 'status', { status: changes.status });
+  sse.notifyJudges(judgeAccounts);
   res.json(updated);
 });
 
@@ -137,6 +149,7 @@ router.delete('/events/:id', requireAdmin, async (req, res) => {
   const eventId = parseId(req.params.id, 'event id');
   await assertEventAccess(req, eventId);
 
+  const judgeAccounts = await judgeAccountsOf(eventId);
   const result = await db.collection('events').deleteOne({ _id: eventId });
   if (result.deletedCount === 0) throw httpError(404, 'Event not found');
 
@@ -144,6 +157,7 @@ router.delete('/events/:id', requireAdmin, async (req, res) => {
     await db.collection(name).deleteMany({ eventId });
   }
   await deleteSubmissions({ eventId }); // also deletes the slide files from GridFS
+  sse.notifyJudges(judgeAccounts);
   res.json({ message: 'Event and all its data deleted' });
 });
 
