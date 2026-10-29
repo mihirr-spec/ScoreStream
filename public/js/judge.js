@@ -244,11 +244,14 @@ async function openEvent(eventId) {
   }
   renderSteps();
   renderCurrent();
+  renderSubmissions();
 }
 
 // Live updates for the open event:
 //   status -> the organiser made it live / ended it: reload so rating unlocks or locks
 //   roster -> a team joined: add it to the list without touching the card you're filling in
+//   submission -> a team changed its repo or slides: refresh only the links, so marks
+//                 you are in the middle of entering are kept
 function watchEvent(eventId) {
   liveSource = new EventSource(`/api/events/${eventId}/stream`);
   liveSource.addEventListener('status', () =>
@@ -256,6 +259,7 @@ function watchEvent(eventId) {
       await loadEvent(eventId);
       renderSteps();
       renderCurrent();
+      renderSubmissions();
       await loadMe();
     })
   );
@@ -265,6 +269,16 @@ function watchEvent(eventId) {
       await loadEvent(eventId);
       renderSteps();
       if (shown !== currentTeamId) renderCurrent();
+      renderSubmissions();
+    })
+  );
+  liveSource.addEventListener('submission', () =>
+    safely(async () => {
+      await loadEvent(eventId);
+      renderSubmissions();
+      const team = data.teams.find((t) => t._id === currentTeamId);
+      const box = document.querySelector('#current-team .project-links');
+      if (team && box) box.replaceWith(buildProjectLinks(team));
     })
   );
   liveSource.addEventListener('open', () => $('live-flag').classList.remove('hidden'));
@@ -333,18 +347,11 @@ function renderCurrent() {
   box.append(buildTeamCard(event, team, scoreFor(team)));
 }
 
-// One team: a star row + slider per rubric criterion, feedback, and submit / navigation.
-function buildTeamCard(event, team, existing) {
-  const live = event.status === 'live';
-  const index = currentIndex();
-  const card = el('section', null, 'card score-card focus');
-  card.append(el('p', `Team ${index + 1} of ${data.teams.length}`, 'step-counter'));
-  const head = el('div', null, 'section-head');
-  head.append(el('h3', team.name), el('span', existing ? 'scored' : 'not scored', `pill ${existing ? 'live' : 'draft'}`));
-  card.append(head, el('div', team.members.join(', ') || 'No members listed', 'members'));
-
-  // What the team shared: its GitHub repo and slides.
+// What a team shared: its GitHub repo and slides (used on the scoring card and in
+// the "All submissions" list). The slides open in the in-page viewer from common.js.
+function buildProjectLinks(team) {
   const project = el('div', null, 'project-links');
+  project.dataset.team = team._id;
   if (team.githubUrl) {
     const repo = el('a', 'GitHub repo ↗', 'secondary');
     repo.href = team.githubUrl;
@@ -362,7 +369,44 @@ function buildTeamCard(event, team, existing) {
     project.append(slides);
   }
   if (!team.githubUrl && !team.slides) project.append(el('span', 'This team has not shared a repo or slides yet.', 'small muted'));
-  card.append(project);
+  return project;
+}
+
+// Below the scoring card: every team's submission in one place, so the judge can
+// look through all repos and slides without stepping through the teams.
+function renderSubmissions() {
+  const { teams } = data;
+  const rows = $('submission-rows');
+  rows.replaceChildren();
+  const shared = teams.filter((t) => t.githubUrl || t.slides).length;
+  $('submissions-note').textContent = `${shared} of ${teams.length} teams have shared a repo or slides`;
+  for (const team of teams) {
+    const row = el('tr');
+    const name = el('td');
+    const open = el('button', team.name, 'link-button');
+    open.type = 'button';
+    open.title = 'Open this team on the scoring card';
+    open.addEventListener('click', () => showTeam(team._id));
+    name.append(open);
+    const links = el('td');
+    links.append(buildProjectLinks(team));
+    row.append(name, links);
+    rows.append(row);
+  }
+  $('no-submissions').classList.toggle('hidden', teams.length > 0);
+}
+
+// One team: a star row + slider per rubric criterion, feedback, and submit / navigation.
+function buildTeamCard(event, team, existing) {
+  const live = event.status === 'live';
+  const index = currentIndex();
+  const card = el('section', null, 'card score-card focus');
+  card.append(el('p', `Team ${index + 1} of ${data.teams.length}`, 'step-counter'));
+  const head = el('div', null, 'section-head');
+  head.append(el('h3', team.name), el('span', existing ? 'scored' : 'not scored', `pill ${existing ? 'live' : 'draft'}`));
+  card.append(head, el('div', team.members.join(', ') || 'No members listed', 'members'));
+
+  card.append(buildProjectLinks(team));
 
   const form = el('form');
   const inputs = {};

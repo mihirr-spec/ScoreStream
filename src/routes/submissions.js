@@ -16,6 +16,7 @@ const express = require('express');
 const { GridFSBucket } = require('mongodb');
 const config = require('../config');
 const { getDb } = require('../db');
+const sse = require('../services/sse');
 const { requireAdmin, assertEventAccess, requireJudge, findJudgeSeat, requireTeam } = require('../middleware/auth');
 const { httpError, parseId } = require('../middleware/validate');
 
@@ -54,6 +55,12 @@ async function assertOpen(eventId) {
   const event = await getDb().collection('events').findOne({ _id: eventId }, { projection: { status: 1 } });
   if (!event) throw httpError(404, 'Event not found');
   if (event.status === 'closed') throw httpError(409, 'This event has ended, so submissions are locked');
+}
+
+// Tells open judge/admin pages of this event that a team's repo or slides changed,
+// so a judge never has to refresh to see a submission made after the page loaded.
+function announce(team) {
+  sse.broadcast(team.eventId.toString(), 'submission', { teamId: team._id.toString() });
 }
 
 // What every page needs to show a submission (no internal ids except the file's).
@@ -117,6 +124,7 @@ router.put('/team/events/:eventId/submission', requireTeam, async (req, res) => 
   const doc = await getDb()
     .collection('submissions')
     .findOneAndUpdate({ eventId: team.eventId, teamId: team._id }, update, { upsert: true, returnDocument: 'after' });
+  announce(team);
   res.json(publicSubmission(doc));
 });
 
@@ -161,6 +169,7 @@ router.put('/team/events/:eventId/slides', requireTeam, async (req, res) => {
     .findOneAndUpdate({ eventId: team.eventId, teamId: team._id }, { $set: { slides, updatedAt: new Date() } }, { upsert: true, returnDocument: 'before' });
   // Replacing slides: delete the old file only after the new one is saved.
   if (previous && previous.slides) await slidesBucket().delete(previous.slides.fileId).catch(() => {});
+  announce(team);
 
   res.status(201).json(publicSubmission({ ...previous, slides, updatedAt: new Date() }));
 });
@@ -174,6 +183,7 @@ router.delete('/team/events/:eventId/slides', requireTeam, async (req, res) => {
     .findOneAndUpdate({ eventId: team.eventId, teamId: team._id }, { $unset: { slides: '' }, $set: { updatedAt: new Date() } }, { returnDocument: 'before' });
   if (!doc || !doc.slides) throw httpError(404, 'No slides uploaded yet');
   await slidesBucket().delete(doc.slides.fileId).catch(() => {});
+  announce(team);
   res.json({ message: 'Slides removed' });
 });
 
